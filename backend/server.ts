@@ -300,9 +300,9 @@ app.post("/api/transcribe-chunk", async (req, res) => {
         const blob = new Blob([chunkBuffer], { type: mimeType || "audio/webm" });
         formData.append("file", blob, `chunk_${chunkIndex || 0}.webm`);
         formData.append("model", "whisper-large-v3");
-        formData.append("language", "en");
+        formData.append("prompt", "Translate any Marathi, Hindi, or Hinglish speech into clear English words.");
 
-        const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+        const groqRes = await fetch("https://api.groq.com/openai/v1/audio/translations", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${activeGroqKey}`
@@ -331,7 +331,7 @@ app.post("/api/transcribe-chunk", async (req, res) => {
               data: chunkBase64
             }
           },
-          "Transcribe this short audio clip accurately. Output only the verbatim transcript text without any intro or commentary."
+          "Listen to this audio clip. If it is spoken in Marathi, Hindi, or Hinglish, translate it accurately into clear English text. Output only the English translation without any commentary."
         ]);
         text = result.response.text().trim();
       } catch (geminiErr: any) {
@@ -940,10 +940,9 @@ async function transcribeWithGroq(fileBuffer: Buffer, mimeType: string, meetingI
   formData.append("file", fileBlob, safeFilename);
   formData.append("model", "whisper-large-v3");
   formData.append("response_format", "json");
-  // Omit explicit "language" parameter so Whisper auto-detects Marathi (mr), Hindi (hi), English (en), etc.
-  formData.append("prompt", "This is an operational meeting in Marathi, Hindi, Hinglish, or English. Transcribe the speech accurately into Roman/English letters.");
+  formData.append("prompt", "Translate any Marathi, Hindi, or Hinglish speech into fluent, accurate English text.");
 
-  const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+  const response = await fetch("https://api.groq.com/openai/v1/audio/translations", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${settings.apiKey}`
