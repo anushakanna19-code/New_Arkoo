@@ -384,7 +384,7 @@ app.post("/api/send-invitation-email", async (req, res) => {
     }
 
     const { transporter, user: gmailUser, pass: gmailPass } = createGoogleSmtpTransporter();
-    const appLink = "https://appointee-sharpie-pouncing.ngrok-free.dev/";
+    const appLink = process.env.APP_URL || "https://new-arkoo.pages.dev/";
 
     if (!gmailPass) {
       console.log(`[Invitation Email Notice] GMAIL_APP_PASSWORD not set in env. Simulated invitation email sent to ${recipientEmail} (${fullName}).`);
@@ -455,7 +455,7 @@ app.post("/api/send-acceptance-email", async (req, res) => {
     }
 
     const { transporter, user: gmailUser, pass: gmailPass } = createGoogleSmtpTransporter();
-    const appLink = "https://appointee-sharpie-pouncing.ngrok-free.dev/";
+    const appLink = process.env.APP_URL || "https://new-arkoo.pages.dev/";
 
     if (!gmailPass) {
       console.log(`[Acceptance Email Notice] GMAIL_APP_PASSWORD not set in env. Simulated activation email sent to ${recipientEmail} (${fullName}).`);
@@ -536,7 +536,7 @@ app.post("/api/send-bulk-application-link", async (req, res) => {
     }
 
     const { transporter, user: gmailUser, pass: gmailPass } = createGoogleSmtpTransporter();
-    const appLink = "https://appointee-sharpie-pouncing.ngrok-free.dev/";
+    const appLink = process.env.APP_URL || "https://new-arkoo.pages.dev/";
 
     if (!gmailPass) {
       return res.json({ success: true, count: listToNotify.length, simulated: true });
