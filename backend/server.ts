@@ -281,6 +281,71 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
+// ─── Live Audio Chunk Transcription API Endpoint ───────────────────────────
+app.post("/api/transcribe-chunk", async (req, res) => {
+  try {
+    const { chunkBase64, mimeType, chunkIndex, meetingId } = req.body;
+    if (!chunkBase64) {
+      return res.status(400).json({ error: "Missing chunkBase64 data" });
+    }
+
+    const chunkBuffer = Buffer.from(chunkBase64, "base64");
+    let text = "";
+
+    // 1. Try Groq Whisper transcription if GROQ_API_KEY available
+    const activeGroqKey = process.env.GROQ_API_KEY || (await getSavedKeyFromFirestore("groq_key"));
+    if (activeGroqKey) {
+      try {
+        const formData = new FormData();
+        const blob = new Blob([chunkBuffer], { type: mimeType || "audio/webm" });
+        formData.append("file", blob, `chunk_${chunkIndex || 0}.webm`);
+        formData.append("model", "whisper-large-v3");
+        formData.append("language", "en");
+
+        const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${activeGroqKey}`
+          },
+          body: formData
+        });
+
+        if (groqRes.ok) {
+          const groqData = await groqRes.json();
+          text = groqData.text || "";
+        }
+      } catch (groqErr: any) {
+        console.warn("[Chunk Transcribe Groq Warning]:", groqErr?.message || groqErr);
+      }
+    }
+
+    // 2. Fallback to Gemini if Groq did not yield text
+    if (!text && process.env.GEMINI_API_KEY) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const result = await model.generateContent([
+          {
+            inlineData: {
+              mimeType: mimeType || "audio/webm",
+              data: chunkBase64
+            }
+          },
+          "Transcribe this short audio clip accurately. Output only the verbatim transcript text without any intro or commentary."
+        ]);
+        text = result.response.text().trim();
+      } catch (geminiErr: any) {
+        console.warn("[Chunk Transcribe Gemini Warning]:", geminiErr?.message || geminiErr);
+      }
+    }
+
+    return res.json({ success: true, text: text || "", chunkIndex });
+  } catch (error: any) {
+    console.error("[Transcribe Chunk Error]:", error);
+    return res.status(500).json({ error: error.message || "Failed to transcribe chunk" });
+  }
+});
+
 // ─── Task Assignment Email API Route ──────────────────────────────────────
 app.post("/api/send-task-email", async (req, res) => {
   try {
