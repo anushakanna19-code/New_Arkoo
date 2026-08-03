@@ -2341,18 +2341,18 @@ app.post("/api/process-meeting", async (req, res) => {
           console.error(`[Google Drive Pipeline Error] Pre-transcription upload failed:`, driveErr.message || driveErr);
           gdriveUploadStatus = 'failed';
         }
+      }
 
-        // Upload MP3 to Cloudinary CDN for instant, 100% reliable 1-click sharing
-        try {
-          sendProgress(48, "Uploading MP3 audio to Cloudinary CDN...");
-          const cloudResult = await uploadAudioToCloudinary(fileContentBuffer, `recording_${meetingId || "meeting"}`);
-          if (cloudResult && cloudResult.url) {
-            backupDriveFileUrl = cloudResult.url; // Set direct Cloudinary HTTPS MP3 link as primary share URL
-            console.log(`[Cloudinary Pipeline] MP3 audio uploaded successfully -> CDN URL: ${cloudResult.url}`);
-          }
-        } catch (cloudErr: any) {
-          console.warn("[Cloudinary Pipeline Warning] Cloudinary upload fallback:", cloudErr.message || cloudErr);
+      // Upload MP3 to Cloudinary CDN for instant, 100% reliable 1-click sharing (Runs ALWAYS for every meeting)
+      try {
+        sendProgress(48, "Uploading MP3 audio to Cloudinary CDN...");
+        const cloudResult = await uploadAudioToCloudinary(fileContentBuffer, `recording_${meetingId || Date.now()}`);
+        if (cloudResult && cloudResult.url) {
+          backupDriveFileUrl = cloudResult.url; // Set direct Cloudinary HTTPS MP3 link as primary share URL
+          console.log(`[Cloudinary Pipeline] MP3 audio uploaded successfully -> CDN URL: ${cloudResult.url}`);
         }
+      } catch (cloudErr: any) {
+        console.warn("[Cloudinary Pipeline Warning] Cloudinary upload fallback:", cloudErr.message || cloudErr);
       }
 
       // Step 2: "use that file" -> Retrieve audio data back from the uploaded Google Drive file
