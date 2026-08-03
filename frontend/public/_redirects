@@ -1,3 +1,2 @@
-# Cloudflare Pages API Proxy Rule
-# Redirect all /api/* requests to your live Render backend URL
-/api/* https://arkoo-backend.onrender.com/api/:splat 200
+# Cloudflare Pages API Proxy Rule for Live Render Backend
+/api/* https://new-arkoo.onrender.com/api/:splat 200
