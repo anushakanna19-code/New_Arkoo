@@ -1,0 +1,6 @@
+{
+  "name": "Arkoo Prebuild Pvt. Ltd. | AI Meeting Intelligence",
+  "description": "AI-driven meeting recording, transcription, MOM generation, and automated task management for construction projects.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Allow unauthenticated reads on the test collection to verify database availability
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com'); }
+    function isAdmin() { return isVerified() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
+    function isManager() { return isVerified() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'management', 'Management', 'Admin']); }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // --- Entity Validations ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid is string && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.role in ['admin', 'manager', 'employee', 'production', 'sourcing'] &&
+             data.uid == request.auth.uid;
+    }
+
+    function isValidMeeting(data) {
+      return data.keys().hasAll(['title', 'createdAt', 'status', 'creatorId']) &&
+             data.title is string && data.title.size() <= 500 &&
+             data.status in ['recording', 'processing', 'completed', 'failed'] &&
+             data.creatorId == request.auth.uid &&
+             (data.duration == null || data.duration is string);
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['title', 'status', 'priority']) &&
+             data.title is string && data.title.size() <= 500 &&
+             data.status in ['pending', 'in-progress', 'completed', 'delayed'] &&
+             data.priority in ['low', 'medium', 'high', 'critical'];
+    }
+
+    // --- Rules ---
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isManager();
+      allow create: if isVerified() && isOwner(userId) && isValidUser(incoming()) && (incoming().role in ['employee', 'manager']); 
+      allow update: if isVerified() && (isOwner(userId) || isManager()) && (
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'department'])) ||
+        (isManager())
+      );
+    }
+
+    match /employees/{employeeId} {
+      allow read: if isVerified();
+      allow write: if isVerified();
+    }
+
+    match /meetings/{meetingId} {
+      allow read: if isVerified();
+      allow create: if isVerified() && isValidMeeting(incoming());
+      allow update: if isVerified();
+      allow delete: if isVerified();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isVerified();
+      allow create: if isVerified() && isValidTask(incoming());
+      allow update: if isVerified();
+      allow delete: if isVerified() && isManager();
+
+      match /notes/{noteId} {
+        allow read: if isVerified();
+        allow create: if isVerified() && incoming().userId == request.auth.uid;
+        allow update: if isVerified() && (incoming().userId == request.auth.uid || isManager());
+        allow delete: if isVerified() && (existing().userId == request.auth.uid || isManager());
+      }
+
+      match /voiceNotes/{voiceNoteId} {
+        allow read: if isVerified();
+        allow create: if isVerified() && incoming().userId == request.auth.uid;
+        allow update: if isVerified() && (incoming().userId == request.auth.uid || isManager());
+        allow delete: if isVerified() && (existing().userId == request.auth.uid || isManager());
+      }
+
+      match /activities/{activityId} {
+        allow read: if isVerified();
+        allow create: if isVerified() && incoming().userId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    match /departments/{deptId} {
+      allow read: if isVerified();
+      allow write: if isAdmin();
+    }
+
+    match /notifications/{noteId} {
+      allow read: if isVerified() && isOwner(existing().userId);
+      allow create: if isManager();
+      allow update: if isVerified() && isOwner(existing().userId) && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+    }
+
+    match /settings/{docId} {
+      allow read, write: if isVerified();
+    }
+  }
+}

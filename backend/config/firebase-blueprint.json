@@ -1,0 +1,143 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "System users with roles (Admin, Manager, Employee)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "manager", "employee", "production", "sourcing"] },
+        "department": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "employee": {
+      "title": "Employee",
+      "description": "Detailed employee profile for management",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "mobile": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "designation": { "type": "string" },
+        "joiningDate": { "type": "string", "format": "date" },
+        "managerId": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "productivityScore": { "type": "number" }
+      },
+      "required": ["userId", "employeeId", "fullName", "departmentId"]
+    },
+    "meeting": {
+      "title": "Meeting",
+      "description": "Recorded meetings and AI generated insights",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "duration": { "type": "number" },
+        "audioUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["recording", "processing", "completed", "failed"] },
+        "transcript": { "type": "string" },
+        "mom": { "type": "string" },
+        "summary": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "departmentIds": { "type": "array", "items": { "type": "string" } },
+        "processedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "date", "status", "creatorId"]
+    },
+    "task": {
+      "title": "Task",
+      "description": "Tasks extracted from meetings or created manually",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "meetingId": { "type": "string" },
+        "assigneeId": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "status": { "type": "string", "enum": ["pending", "in-progress", "completed", "delayed"] },
+        "deadline": { "type": "string", "format": "date" },
+        "remarks": { "type": "string" },
+        "proofUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "status", "priority"]
+    },
+    "department": {
+      "title": "Department",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "code": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "notification": {
+      "title": "Notification",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message"]
+    },
+    "taskNote": {
+      "title": "Task Note",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "comment", "createdAt"]
+    },
+    "taskVoiceNote": {
+      "title": "Task Voice Note",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "audioUrl": { "type": "string" },
+        "transcript": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "audioUrl", "createdAt"]
+    },
+    "taskActivity": {
+      "title": "Task Activity",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "user", "description": "User profiles" },
+    "/employees/{employeeId}": { "schema": "employee", "description": "Employee database" },
+    "/meetings/{meetingId}": { "schema": "meeting", "description": "Meeting records" },
+    "/tasks/{taskId}": { "schema": "task", "description": "Task management" },
+    "/tasks/{taskId}/notes/{noteId}": { "schema": "taskNote", "description": "Notes on individual task" },
+    "/tasks/{taskId}/voiceNotes/{voiceId}": { "schema": "taskVoiceNote", "description": "Voice attachments on individual task" },
+    "/tasks/{taskId}/activities/{activityId}": { "schema": "taskActivity", "description": "Chronological audit log" },
+    "/departments/{deptId}": { "schema": "department", "description": "Department definitions" },
+    "/notifications/{noteId}": { "schema": "notification", "description": "User alerts" }
+  }
+}
