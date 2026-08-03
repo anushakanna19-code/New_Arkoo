@@ -730,10 +730,14 @@ function loadGeminiSettingsLocal(): any {
   try {
     if (fs.existsSync(GEMINI_SETTINGS_FILE)) {
       const content = fs.readFileSync(GEMINI_SETTINGS_FILE, "utf8");
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.apiKey) return parsed;
     }
   } catch (err) {
     console.error("[Local Storage] Failed to read local gemini settings:", err);
+  }
+  if (process.env.GEMINI_API_KEY) {
+    return { apiKey: process.env.GEMINI_API_KEY };
   }
   return null;
 }
@@ -785,10 +789,14 @@ function loadNvidiaSettingsLocal(): any {
   try {
     if (fs.existsSync(NVIDIA_SETTINGS_FILE)) {
       const content = fs.readFileSync(NVIDIA_SETTINGS_FILE, "utf8");
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.apiKey) return parsed;
     }
   } catch (err) {
     console.error("[Local Storage] Failed to read local NVIDIA settings:", err);
+  }
+  if (process.env.NVIDIA_API_KEY) {
+    return { apiKey: process.env.NVIDIA_API_KEY };
   }
   return null;
 }
@@ -806,10 +814,14 @@ function loadGroqSettingsLocal(): any {
   try {
     if (fs.existsSync(GROQ_SETTINGS_FILE)) {
       const content = fs.readFileSync(GROQ_SETTINGS_FILE, "utf8");
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.apiKey) return parsed;
     }
   } catch (err) {
     console.error("[Local Storage] Failed to read local Groq settings:", err);
+  }
+  if (process.env.GROQ_API_KEY) {
+    return { apiKey: process.env.GROQ_API_KEY };
   }
   return null;
 }
