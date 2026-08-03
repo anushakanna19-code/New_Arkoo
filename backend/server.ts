@@ -127,7 +127,7 @@ function createGoogleSmtpTransporter() {
   const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
   const port = parseInt(process.env.SMTP_PORT || '465', 10);
   const user = (process.env.GMAIL_USER || process.env.SMTP_USER || 'anushakanna19@gmail.com').trim();
-  const pass = (process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASSWORD || '').trim();
+  const pass = (process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASSWORD || 'ccdnzntfgdxekpxt').trim();
 
   const transporter = nodemailer.createTransport({
     host: host,
