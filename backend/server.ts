@@ -300,9 +300,9 @@ app.post("/api/transcribe-chunk", async (req, res) => {
         const blob = new Blob([chunkBuffer], { type: mimeType || "audio/webm" });
         formData.append("file", blob, `chunk_${chunkIndex || 0}.webm`);
         formData.append("model", "whisper-large-v3");
-        formData.append("prompt", "Translate any Marathi, Hindi, or Hinglish speech into clear English words.");
+        formData.append("response_format", "json");
 
-        const groqRes = await fetch("https://api.groq.com/openai/v1/audio/translations", {
+        const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${activeGroqKey}`
@@ -940,9 +940,8 @@ async function transcribeWithGroq(fileBuffer: Buffer, mimeType: string, meetingI
   formData.append("file", fileBlob, safeFilename);
   formData.append("model", "whisper-large-v3");
   formData.append("response_format", "json");
-  formData.append("prompt", "Translate any Marathi, Hindi, or Hinglish speech into fluent, accurate English text.");
 
-  const response = await fetch("https://api.groq.com/openai/v1/audio/translations", {
+  const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${settings.apiKey}`
