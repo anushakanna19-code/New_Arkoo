@@ -650,7 +650,7 @@ export function MeetingModule({
               await updateDoc(doc(db, 'meetings', meetingRefId), { audioUrl: cloudUrl });
               console.log('[Background Storage] Audio uploaded to Firebase Storage:', cloudUrl);
             } catch (storageErr) {
-              console.warn('[Background Storage Warning] Non-blocking Storage upload omitted:', storageErr);
+              // Backend Cloudinary CDN handles primary audio storage
             }
           })();
 
