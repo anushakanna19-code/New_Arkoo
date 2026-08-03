@@ -137,6 +137,9 @@ function createGoogleSmtpTransporter() {
       user: user,
       pass: pass
     },
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
     tls: {
       rejectUnauthorized: false
     }
@@ -434,12 +437,17 @@ app.post("/api/send-invitation-email", async (req, res) => {
       `
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log(`[Invitation Email Success] Invitation email successfully dispatched to official email ${recipientEmail}`);
-    return res.json({ success: true, message: `Invitation email sent to ${recipientEmail}` });
+    // Send email asynchronously in background so client UI responds instantly
+    transporter.sendMail(mailOptions).then(() => {
+      console.log(`[Invitation Email Success] Invitation email successfully dispatched to official email ${recipientEmail}`);
+    }).catch((err: any) => {
+      console.warn(`[Invitation Email Warning] Background dispatch omitted:`, err?.message || err);
+    });
+
+    return res.json({ success: true, message: `Invitation email queued for ${recipientEmail}` });
   } catch (err: any) {
-    console.error(`[Invitation Email Error] Failed to send invitation email:`, err?.message || err);
-    return res.status(500).json({ error: err.message || "Failed to send invitation email" });
+    console.error(`[Invitation Email Error] Failed to process invitation request:`, err?.message || err);
+    return res.status(500).json({ error: err.message || "Failed to process invitation request" });
   }
 });
 
@@ -505,12 +513,17 @@ app.post("/api/send-acceptance-email", async (req, res) => {
       `
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log(`[Acceptance Email Success] Acceptance email with application link dispatched to official email ${recipientEmail}`);
-    return res.json({ success: true, message: `Acceptance email sent to ${recipientEmail}` });
+    // Send email asynchronously in background so client UI responds instantly
+    transporter.sendMail(mailOptions).then(() => {
+      console.log(`[Acceptance Email Success] Acceptance email with application link dispatched to official email ${recipientEmail}`);
+    }).catch((err: any) => {
+      console.warn(`[Acceptance Email Warning] Background dispatch omitted:`, err?.message || err);
+    });
+
+    return res.json({ success: true, message: `Acceptance email queued for ${recipientEmail}` });
   } catch (err: any) {
-    console.error(`[Acceptance Email Error] Failed to send acceptance email:`, err?.message || err);
-    return res.status(500).json({ error: err.message || "Failed to send acceptance email" });
+    console.error(`[Acceptance Email Error] Failed to process acceptance request:`, err?.message || err);
+    return res.status(500).json({ error: err.message || "Failed to process acceptance request" });
   }
 });
 
