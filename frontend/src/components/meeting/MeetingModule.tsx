@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { doc as firestoreDoc } from 'firebase/firestore';
 import { db, auth, storage } from '@/lib/firebase';
+import { getApiUrl } from '@/lib/api';
 import { parseRelativeDeadline, formatDeadlineDisplay } from '@/lib/date-utils';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
@@ -704,7 +705,7 @@ export function MeetingModule({
           setUploadProgress(28);
           setProgressLabel("Contacting AI agent pipeline...");
 
-          const res = await fetch('/api/process-meeting', {
+          const res = await fetch(getApiUrl('/api/process-meeting'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -953,7 +954,7 @@ export function MeetingModule({
       setUploadProgress(12);
       setProgressLabel("Downloading Drive audio contents on server...");
 
-      const res = await fetch('/api/process-meeting', {
+      const res = await fetch(getApiUrl('/api/process-meeting'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -2521,7 +2522,7 @@ function MeetingAIChat({ meeting }: { meeting: any }) {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/ask-meeting', {
+      const res = await fetch(getApiUrl('/api/ask-meeting'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
