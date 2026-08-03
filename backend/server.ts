@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
@@ -3246,22 +3245,25 @@ app.post("/api/upload-report", async (req, res) => {
 // Vite middleware setup
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    const viteConfigPath = fs.existsSync(path.join(__dirnameResolved, "../frontend/vite.config.ts"))
-      ? path.join(__dirnameResolved, "../frontend/vite.config.ts")
-      : path.join(process.cwd(), "frontend", "vite.config.ts");
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const viteConfigPath = fs.existsSync(path.join(__dirnameResolved, "../frontend/vite.config.ts"))
+        ? path.join(__dirnameResolved, "../frontend/vite.config.ts")
+        : path.join(process.cwd(), "frontend", "vite.config.ts");
 
-    const vite = await createViteServer({
-      configFile: viteConfigPath,
-      root: path.dirname(viteConfigPath),
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+      const vite = await createViteServer({
+        configFile: viteConfigPath,
+        root: path.dirname(viteConfigPath),
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.warn("[Vite Middleware] Dev server middleware skipped.");
+    }
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get('/', (req, res) => {
+      res.json({ status: "online", message: "Arkoo Backend AI Engine is active." });
     });
   }
 
