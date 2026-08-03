@@ -121,7 +121,7 @@ export function EmployeeModule({ profile }: { profile: any }) {
       toast.error('No stakeholders found to send emails to.');
       return;
     }
-    if (!confirm(`Are you sure you want to send the application link (https://appointee-sharpie-pouncing.ngrok-free.dev/) to all ${employees.length} stakeholders' official emails?`)) {
+    if (!confirm(`Are you sure you want to send the official application link (https://new-arkoo.pages.dev/) to all ${employees.length} stakeholders' official emails?`)) {
       return;
     }
 
@@ -221,6 +221,13 @@ export function EmployeeModule({ profile }: { profile: any }) {
 
         {isAdminOrManager && (
           <div className="flex items-center gap-2">
+            <Button 
+              onClick={handleSendLinkToAllStakeholders}
+              variant="outline"
+              className="border-orange-200 text-orange-600 hover:bg-orange-50 font-bold h-11 rounded-xl text-sm px-4 bg-white shadow-sm"
+            >
+              <Mail className="w-4 h-4 mr-2 text-orange-500" /> Send Link to All Stakeholders
+            </Button>
             <Dialog open={openAdd} onOpenChange={setOpenAdd}>
               <DialogTrigger render={<Button className="bg-brand-orange hover:bg-orange-600 text-white font-bold h-11 rounded-xl text-sm px-6 shadow-md shadow-orange-500/20">
                 <Plus className="w-4 h-4 mr-2" /> Add Stakeholder
