@@ -330,7 +330,7 @@ export function MeetingModule({
       }
 
       // 2. Fetch chunk transcription API
-      const response = await fetch('/api/transcribe-chunk', {
+      const response = await fetch(getApiUrl('/api/transcribe-chunk'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1742,7 +1742,7 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
     setRetryingUpload(true);
     const retryToast = toast.loading("Initiating secure backup upload retry to Google Drive...");
     try {
-      const res = await fetch(`/api/meetings/${currentMeeting.id}/retry-drive-upload`, {
+      const res = await fetch(getApiUrl(`/api/meetings/${currentMeeting.id}/retry-drive-upload`), {
         method: 'POST'
       });
       if (!res.ok) {

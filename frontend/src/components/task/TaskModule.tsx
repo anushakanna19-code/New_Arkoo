@@ -14,6 +14,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
+import { getApiUrl } from '@/lib/api';
 import {
   ClipboardList,
   Search,
@@ -1444,7 +1445,7 @@ function TaskForm({ task, profile, employees, onSuccess }: { task?: any; profile
       // Dispatch task assignment email notification to stakeholder
       if (formData.assigneeName && formData.assigneeName !== 'Unassigned') {
         const recipientEmail = matchedEmp?.email || matchedEmp?.personalEmail || '';
-        fetch('/api/send-task-email', {
+        fetch(getApiUrl('/api/send-task-email'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

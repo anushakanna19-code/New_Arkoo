@@ -12,6 +12,7 @@ import {
   setDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getApiUrl } from '@/lib/api';
 import { 
   Users, 
   Plus, 
@@ -93,7 +94,7 @@ export function EmployeeModule({ profile }: { profile: any }) {
       if (officialEmail && officialEmail.includes('@')) {
         toast.loading(`Sending activation link email to ${officialEmail}...`, { id: 'accept-mail-toast' });
         try {
-          await fetch('/api/send-acceptance-email', {
+          await fetch(getApiUrl('/api/send-acceptance-email'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -134,7 +135,7 @@ export function EmployeeModule({ profile }: { profile: any }) {
         status: e.status || (e.isActive !== false ? 'Active' : 'Pending')
       }));
 
-      const res = await fetch('/api/send-bulk-application-link', {
+      const res = await fetch(getApiUrl('/api/send-bulk-application-link'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stakeholders: payload })
@@ -618,7 +619,7 @@ function EmployeeForm({ employee, onSuccess }: { employee?: any; onSuccess: () =
         toast.loading(isTypeAdmin ? 'Dispatching activation email...' : 'Dispatching invitation email...', { id: 'invite-toast' });
 
         try {
-          const mailRes = await fetch(endpoint, {
+          const mailRes = await fetch(getApiUrl(endpoint), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
