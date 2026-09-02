@@ -455,8 +455,12 @@ export default function App() {
               />
             </div>
           ) : (
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shrink-0 text-white font-bold text-base shadow-sm">
-              A
+            <div className="flex items-center justify-center w-full">
+              <img 
+                src="https://www.arkooprebuild.com/img/logo/logo.png" 
+                alt="Arkoo" 
+                className="h-8 max-h-8 w-auto max-w-[44px] object-contain" 
+              />
             </div>
           )}
         </div>
