@@ -131,12 +131,11 @@ export function RecycleBinModule({ profile }: { profile: any }) {
         
         {deletedMeetings.length > 0 && (
           <Button 
-            variant="destructive" 
-            className="rounded-xl h-10 px-4 text-xs font-bold bg-red-600 hover:bg-red-700 shadow-sm whitespace-nowrap cursor-pointer w-full sm:w-auto justify-center"
+            className="rounded-lg h-10 px-4 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20 whitespace-nowrap cursor-pointer w-full sm:w-auto justify-center flex items-center gap-2 border-0"
             onClick={() => setConfirmDeleteAll(true)}
           >
-            <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-            Empty Recycle Bin
+            <Trash2 className="w-4 h-4 text-white" />
+            <span className="text-white font-bold">Empty Recycle Bin</span>
           </Button>
         )}
       </div>
@@ -154,8 +153,8 @@ export function RecycleBinModule({ profile }: { profile: any }) {
               </div>
             </div>
             <div className="flex gap-2 w-full sm:w-auto shrink-0 justify-end">
-              <Button variant="outline" size="sm" className="rounded-xl text-xs font-bold bg-white cursor-pointer flex-1 sm:flex-initial" onClick={() => setConfirmDeleteAll(false)}>Cancel</Button>
-              <Button variant="destructive" size="sm" className="rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 cursor-pointer flex-1 sm:flex-initial" onClick={emptyRecycleBin}>Delete All</Button>
+              <Button variant="outline" size="sm" className="rounded-lg text-xs font-bold bg-white text-slate-700 border-slate-200 hover:bg-slate-50 cursor-pointer flex-1 sm:flex-initial h-9 px-4" onClick={() => setConfirmDeleteAll(false)}>Cancel</Button>
+              <Button size="sm" className="rounded-lg text-xs font-bold bg-red-600 hover:bg-red-700 text-white cursor-pointer flex-1 sm:flex-initial h-9 px-4 border-0" onClick={emptyRecycleBin}>Delete All</Button>
             </div>
           </CardContent>
         </Card>
@@ -198,21 +197,21 @@ export function RecycleBinModule({ profile }: { profile: any }) {
                   
                   <div className="mt-auto pt-3 border-t border-slate-100 flex gap-2">
                     <Button 
-                      variant="outline" 
                       size="sm"
-                      className="flex-1 rounded-xl text-xs font-bold hover:text-emerald-700 hover:border-emerald-200 hover:bg-emerald-50 text-slate-700 border-slate-200 bg-white transition-colors cursor-pointer justify-center"
+                      className="flex-1 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer justify-center flex items-center gap-1.5 h-9"
                       onClick={() => restoreMeeting(meeting.id)}
                     >
-                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Restore
+                      <RotateCcw className="w-3.5 h-3.5 text-white" />
+                      <span className="text-white font-bold">Restore</span>
                     </Button>
                     <Button 
-                      variant="ghost" 
+                      variant="outline" 
                       size="icon-sm"
-                      className="rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                      className="rounded-lg text-red-500 border-red-200 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer h-9 w-9 shrink-0"
                       title="Permanently Delete"
                       onClick={() => permanentlyDeleteMeeting(meeting.id)}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4 text-red-500" />
                     </Button>
                   </div>
                 </CardContent>
