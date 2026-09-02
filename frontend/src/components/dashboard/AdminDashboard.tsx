@@ -19,7 +19,9 @@ import {
   TrendingUp,
   BarChart3,
   FileText,
-  Activity
+  Activity,
+  ArrowUpRight,
+  ArrowDownRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -73,7 +75,7 @@ export function AdminDashboard({ profile }: { profile: any }) {
             title: 'MOM Generated',
             subtitle: latest.title,
             detail: `${latest.tasksCount || 0} Action items pushed`,
-            color: 'orange'
+            color: 'blue'
           }, ...filtered].slice(0, 3);
         });
       }
@@ -128,7 +130,7 @@ export function AdminDashboard({ profile }: { profile: any }) {
             title: 'Task Delayed Alert',
             subtitle: delayedTask.title,
             detail: `Assigned to: ${delayedTask.assigneeName || 'Unassigned'} | Due: ${formatDeadlineDisplay(delayedTask.deadline)}`,
-            color: 'blue'
+            color: 'amber'
           }, ...filtered].slice(0, 3);
         });
       }
@@ -139,7 +141,7 @@ export function AdminDashboard({ profile }: { profile: any }) {
         const dTasks = tasks.filter(t => String(t.department || '').toLowerCase() === name.toLowerCase());
         const dCompleted = dTasks.filter(t => String(t.status || '').toLowerCase() === 'completed').length;
         const completion = dTasks.length > 0 ? Math.round((dCompleted / dTasks.length) * 100) : 0;
-        return { name, completion };
+        return { name, completion, total: dTasks.length, completed: dCompleted };
       });
       setDeptStats(dStats.filter(d => d.completion > 0 || depts.slice(0, 3).includes(d.name)));
 
@@ -198,7 +200,7 @@ export function AdminDashboard({ profile }: { profile: any }) {
             title: 'New Employee Onboarded',
             subtitle: `${latest.fullName} (${latest.department})`,
             detail: 'Welcome to the team!',
-            color: 'slate'
+            color: 'green'
           }, ...filtered].slice(0, 3);
         });
       }
@@ -213,79 +215,107 @@ export function AdminDashboard({ profile }: { profile: any }) {
     };
   }, []);
 
+  const completionRate = stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0;
+
   return (
-    <div className="space-y-8 pb-10">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Welcome back, {profile?.displayName || 'Sir'}</h1>
-        <p className="text-slate-500">Here's what's happening across Arkoo Prebuild Pvt. Ltd. projects today.</p>
+    <div className="space-y-6 pb-10">
+      {/* Welcome Section */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">
+            Welcome back, {profile?.displayName || 'Sir'}
+          </h1>
+          <p className="text-[13px] text-slate-500 mt-1">Here's what's happening across your projects today.</p>
+        </div>
+        <div className="text-[11px] text-slate-400 font-medium">
+          {format(new Date(), 'EEEE, MMMM d, yyyy')}
+        </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <StatCard title="Total Meetings" value={stats.totalMeetings} icon={Mic} color="blue" />
         <StatCard title="Total Tasks" value={stats.totalTasks} icon={ClipboardList} color="slate" />
-        <StatCard title="Pending" value={stats.pendingTasks} icon={Clock} color="orange" />
-        <StatCard title="In Progress" value={stats.inProgressTasks} icon={Activity} color="purple" />
-        <StatCard title="Completed" value={stats.completedTasks} icon={CheckCircle2} color="green" />
-        <StatCard title="Delayed / Past Due" value={stats.delayedTasks} icon={AlertCircle} color="red" />
+        <StatCard title="Pending" value={stats.pendingTasks} icon={Clock} color="amber" />
+        <StatCard title="In Progress" value={stats.inProgressTasks} icon={Activity} color="indigo" />
+        <StatCard title="Completed" value={stats.completedTasks} icon={CheckCircle2} color="emerald" />
+        <StatCard title="Delayed" value={stats.delayedTasks} icon={AlertCircle} color="rose" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
         {/* Activity Graph */}
-        <Card className="lg:col-span-2 shadow-sm border-slate-200 bg-white">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold flex items-center gap-2 m-0">
-              <TrendingUp className="w-5 h-5 text-brand-orange" />
-              Weekly Productivity
-            </CardTitle>
-            <CardDescription className="text-slate-500 text-xs">Number of tasks completed per day</CardDescription>
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <TrendingUp className="w-3.5 h-3.5 text-blue-600" />
+                </div>
+                Weekly Productivity
+              </CardTitle>
+              <CardDescription>Tasks completed per day of the week</CardDescription>
+            </div>
+            <span className="text-[11px] font-medium text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">This Week</span>
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardContent className="h-[280px] sm:h-[300px]">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
               <AreaChart data={weeklyData}>
                 <defs>
                   <linearGradient id="colorTasks" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#F97316" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.08}/>
+                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} stroke="#64748B" />
-                <YAxis fontSize={12} tickLine={false} axisLine={false} stroke="#64748B" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} stroke="#94A3B8" dy={5} />
+                <YAxis fontSize={11} tickLine={false} axisLine={false} stroke="#94A3B8" dx={-5} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  itemStyle={{ color: '#F97316', fontWeight: 600 }}
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    borderRadius: '12px', 
+                    border: '1px solid #E2E8F0', 
+                    boxShadow: '0 4px 12px rgb(0 0 0 / 0.06)',
+                    fontSize: '12px',
+                    padding: '8px 12px'
+                  }}
+                  itemStyle={{ color: '#3B82F6', fontWeight: 600 }}
                 />
-                <Area type="monotone" dataKey="tasks" stroke="#F97316" strokeWidth={3} fillOpacity={1} fill="url(#colorTasks)" />
+                <Area type="monotone" dataKey="tasks" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorTasks)" dot={{ r: 3.5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
         {/* Department Progress */}
-        <Card className="shadow-sm border-slate-200 bg-white">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-lg font-bold flex items-center gap-2 m-0">
-              <BarChart3 className="w-5 h-5 text-brand-blue" />
+            <CardTitle className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center">
+                <BarChart3 className="w-3.5 h-3.5 text-slate-600" />
+              </div>
               Department Efficiency
             </CardTitle>
-            <CardDescription className="text-slate-500 text-xs">Completion rate by department</CardDescription>
+            <CardDescription>Task completion rate by department</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-4">
             {deptStats.length === 0 ? (
-               <div className="text-center py-10 text-slate-400 text-sm italic">Assign tasks to see statistics.</div>
+               <div className="text-center py-10 text-slate-400 text-[13px]">Assign tasks to see statistics.</div>
             ) : deptStats.map((dept) => (
-              <div key={dept.name} className="space-y-1">
-                <div className="flex justify-between items-center text-xs font-semibold">
-                  <span className="text-slate-700">{dept.name}</span>
-                  <span className="text-slate-500 font-bold">{dept.completion}%</span>
+              <div key={dept.name} className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-[13px] font-medium text-slate-700">{dept.name}</span>
+                  <span className="text-[12px] text-slate-500 font-semibold">{dept.completion}%</span>
                 </div>
-                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                   <motion.div 
                     initial={{ width: 0 }}
                     animate={{ width: `${dept.completion}%` }}
                     transition={{ duration: 1, ease: 'easeOut' }}
-                    className={`h-full rounded-full ${dept.completion > 80 ? 'bg-emerald-500' : dept.completion > 50 ? 'bg-brand-blue' : 'bg-brand-orange'}`}
+                    className={`h-full rounded-full ${
+                      dept.completion > 80 ? 'bg-emerald-500' : 
+                      dept.completion > 50 ? 'bg-blue-500' : 
+                      dept.completion > 25 ? 'bg-amber-500' : 'bg-slate-300'
+                    }`}
                   />
                 </div>
               </div>
@@ -294,112 +324,183 @@ export function AdminDashboard({ profile }: { profile: any }) {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
         {/* Recent Meetings */}
-        <Card className="shadow-sm border-slate-200 bg-white animate-fade-in">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-bold flex items-center gap-2 m-0">
-              <Clock className="w-5 h-5 text-brand-blue" />
+            <CardTitle className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                <Clock className="w-3.5 h-3.5 text-blue-600" />
+              </div>
               Recent Meetings
             </CardTitle>
-            <Button variant="outline" size="sm" className="rounded-lg h-9 font-bold text-xs">View All</Button>
+            <button className="text-[12px] font-medium text-blue-600 hover:text-blue-700 transition-colors cursor-pointer flex items-center gap-1">
+              View All <ArrowUpRight className="w-3 h-3" />
+            </button>
           </CardHeader>
           <CardContent>
-             <div className="space-y-4">
+             <div className="space-y-2">
                 {recentMeetings.length === 0 ? (
-                   <div className="text-center py-10 text-slate-400 text-sm italic">No processed meetings found.</div>
+                   <div className="text-center py-10 text-slate-400 text-[13px]">No processed meetings found.</div>
                 ) : recentMeetings.map(meeting => (
-                  <div key={meeting.id} className="flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${meeting.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-brand-blue/10 text-brand-blue'}`}>
-                      <Mic className="w-5 h-5" />
+                  <div key={meeting.id} className="flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-slate-50/80 transition-colors cursor-pointer group">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                      meeting.status === 'completed' ? 'bg-emerald-50 text-emerald-500' : 
+                      meeting.status === 'failed' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'
+                    }`}>
+                      <Mic className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-900 truncate text-sm m-0 leading-tight">{meeting.title}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5 font-medium">{meeting.duration || '00:00'} • {meeting.department || 'General'}</p>
+                      <p className="font-medium text-slate-800 truncate text-[13px] leading-tight">{meeting.title}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{meeting.duration || '00:00'} • {meeting.department || 'General'}</p>
                     </div>
-                    <div className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                       meeting.status === 'completed' 
                         ? 'bg-emerald-50 text-emerald-600' 
                         : (meeting.status === 'failed' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600')
                     }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        meeting.status === 'completed' ? 'bg-emerald-500' : 
+                        meeting.status === 'failed' ? 'bg-red-500' : 'bg-blue-500'
+                      }`} />
                       {meeting.status}
-                    </div>
+                    </span>
                   </div>
                 ))}
              </div>
           </CardContent>
         </Card>
 
-        {/* Activity alerts */}
-        <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h4 className="font-bold text-sm flex items-center gap-2 m-0 text-white tracking-wider">
-                <AlertCircle className="w-4 h-4 text-orange-500" />
-                AI SYSTEM ALERTS
-              </h4>
+        {/* Activity & Alerts */}
+        <Card className="bg-slate-900 border-slate-800 text-white">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-white">
+                <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                </div>
+                System Alerts
+              </CardTitle>
               {alerts.length > 0 && (
                 <button 
                   onClick={() => setAlerts([])}
-                  className="text-[9px] font-black tracking-widest text-slate-500 hover:text-white transition-colors"
+                  className="text-[10px] font-semibold tracking-wide text-slate-500 hover:text-white transition-colors cursor-pointer"
                   id="clear-alerts-btn"
                 >
-                  CLEAR ALL
+                  CLEAR
                 </button>
               )}
             </div>
-            <div className="space-y-5 flex-1">
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
               {alerts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 opacity-30 italic text-xs text-slate-300">
+                <div className="flex flex-col items-center justify-center py-10 opacity-40 text-[13px] text-slate-300">
                   No recent system alerts.
                 </div>
               ) : alerts.map((alert, idx) => (
-                <div key={idx} className={`flex gap-3 border-l-2 pl-4 py-0.5 ${
-                  alert.color === 'orange' ? 'border-orange-500' : 
-                  alert.color === 'blue' ? 'border-blue-500' : 'border-slate-700'
+                <div key={idx} className={`flex gap-3 border-l-2 pl-3.5 py-1 ${
+                  alert.color === 'amber' ? 'border-amber-400' : 
+                  alert.color === 'blue' ? 'border-blue-400' : 
+                  alert.color === 'green' ? 'border-emerald-400' : 'border-slate-600'
                 }`}>
-                  <div>
-                    <p className="text-xs font-black text-white leading-none m-0">{alert.title}</p>
-                    <p className="text-[10px] text-slate-400 mt-1 truncate max-w-[280px] leading-tight mb-0">{alert.subtitle}</p>
-                    <p className={`text-[10px] mt-1 italic font-bold mb-0 ${
-                      alert.color === 'orange' ? 'text-brand-orange' : 
-                      alert.color === 'blue' ? 'text-blue-400' : 'text-slate-400'
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-white leading-tight">{alert.title}</p>
+                    <p className="text-[11px] text-slate-400 mt-1 truncate leading-tight">{alert.subtitle}</p>
+                    <p className={`text-[11px] mt-1 font-medium ${
+                      alert.color === 'amber' ? 'text-amber-400' : 
+                      alert.color === 'blue' ? 'text-blue-400' : 
+                      alert.color === 'green' ? 'text-emerald-400' : 'text-slate-400'
                     }`}>{alert.detail}</p>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-          <Button variant="ghost" className="w-full mt-6 bg-slate-800/40 hover:bg-slate-800 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white h-10 rounded-xl border-none">
-            View All Activity
-          </Button>
-        </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Completion Rate Summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <Card className="sm:col-span-1">
+          <CardContent className="p-5 flex flex-col items-center justify-center text-center">
+            <div className="relative w-20 h-20 mb-3">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#F1F5F9" strokeWidth="3" />
+                <motion.path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="#3B82F6"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  initial={{ strokeDasharray: "0 100" }}
+                  animate={{ strokeDasharray: `${completionRate} 100` }}
+                  transition={{ duration: 1.5, ease: 'easeOut' }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-lg font-bold text-slate-800">{completionRate}%</span>
+              </div>
+            </div>
+            <p className="text-[13px] font-semibold text-slate-700">Overall Completion</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">{stats.completedTasks} of {stats.totalTasks} tasks</p>
+          </CardContent>
+        </Card>
+
+        <Card className="sm:col-span-2">
+          <CardContent className="p-5">
+            <p className="text-[13px] font-semibold text-slate-700 mb-3">Task Distribution</p>
+            <div className="space-y-2.5">
+              {[
+                { label: 'Completed', value: stats.completedTasks, total: stats.totalTasks, color: 'bg-emerald-500' },
+                { label: 'In Progress', value: stats.inProgressTasks, total: stats.totalTasks, color: 'bg-blue-500' },
+                { label: 'Pending', value: stats.pendingTasks, total: stats.totalTasks, color: 'bg-amber-400' },
+                { label: 'Delayed', value: stats.delayedTasks, total: stats.totalTasks, color: 'bg-rose-500' },
+              ].map(item => (
+                <div key={item.label} className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full ${item.color} shrink-0`} />
+                  <span className="text-[12px] text-slate-600 font-medium w-24">{item.label}</span>
+                  <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${item.total > 0 ? (item.value / item.total) * 100 : 0}%` }}
+                      transition={{ duration: 1, ease: 'easeOut' }}
+                      className={`h-full rounded-full ${item.color}`}
+                    />
+                  </div>
+                  <span className="text-[12px] font-semibold text-slate-700 w-8 text-right">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 }
 
 function StatCard({ title, value, icon: Icon, color }: any) {
-  const colors: any = {
-    blue: 'text-blue-600 border-l-blue-600',
-    orange: 'text-orange-600 border-l-orange-600',
-    slate: 'text-slate-600 border-l-slate-600',
-    purple: 'text-indigo-600 border-l-indigo-600',
-    green: 'text-emerald-600 border-l-emerald-600',
-    red: 'text-rose-600 border-l-rose-600'
+  const colorMap: any = {
+    blue:    { bg: 'bg-blue-50',    text: 'text-blue-600',    icon: 'text-blue-500' },
+    amber:   { bg: 'bg-amber-50',   text: 'text-amber-600',   icon: 'text-amber-500' },
+    slate:   { bg: 'bg-slate-100',  text: 'text-slate-600',   icon: 'text-slate-500' },
+    indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-600',  icon: 'text-indigo-500' },
+    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: 'text-emerald-500' },
+    rose:    { bg: 'bg-rose-50',    text: 'text-rose-600',    icon: 'text-rose-500' },
   };
-  const activeColorClass = colors[color] || 'text-slate-600 border-l-slate-600';
+  const c = colorMap[color] || colorMap.slate;
 
   return (
-    <Card className={`shadow-sm border-slate-200 border-l-4 ${activeColorClass} rounded-xl overflow-hidden transform hover:scale-[1.02] transition-all bg-white`}>
-      <CardContent className="p-4 flex flex-row items-center justify-between h-20">
-        <div>
-          <span className="text-slate-400 text-[9px] font-black uppercase tracking-wide mb-1 block">{title}</span>
-          <span className="text-xl font-black text-slate-800 tracking-tight">{value}</span>
+    <Card className="group cursor-default">
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className={`w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center`}>
+            <Icon className={`w-4 h-4 ${c.icon}`} />
+          </div>
+          <ArrowUpRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-400 transition-colors" />
         </div>
-        <div className={`p-2 rounded-xl bg-slate-50 shrink-0 ${activeColorClass.split(' ')[0]}`}>
-          <Icon className="w-4 h-4" />
-        </div>
+        <span className="text-2xl sm:text-[28px] font-bold text-slate-800 tracking-tight block leading-none">{value}</span>
+        <span className="text-[11px] sm:text-[12px] text-slate-500 font-medium mt-1.5 block">{title}</span>
       </CardContent>
     </Card>
   );

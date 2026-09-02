@@ -1,19 +1,56 @@
+# ─── Dependencies ───────────────────────────────────────────
 node_modules/
 backend/node_modules/
+frontend/node_modules/
+
+# ─── Build Artifacts ────────────────────────────────────────
 build/
 dist/
 backend/dist/
-coverage/
+frontend/dist/
+*.tsbuildinfo
+
+# ─── Environment & Secrets ──────────────────────────────────
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# ─── Settings Files (may contain API keys) ──────────────────
+*-settings.json
+backend/config/gdrive-settings.json
+backend/config/groq-settings.json
+backend/config/nvidia-settings.json
+backend/config/openai-settings.json
+
+# ─── Uploads & Runtime Data ─────────────────────────────────
 uploads/
 backend/uploads/
-.DS_Store
+
+# ─── Logs ───────────────────────────────────────────────────
 *.log
-.env*
-backend/.env*
-!.env.example
-*-settings.json
-gdrive-settings.json
-gemini-settings.json
-cloudinary-settings.json
-groq-settings.json
-nvidia-settings.json
+logs/
+
+# ─── OS Files ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── IDE & Editor ──────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── Testing & Coverage ────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─── Docker ─────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ─── Misc ───────────────────────────────────────────────────
+.qodo/

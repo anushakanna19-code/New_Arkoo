@@ -143,7 +143,7 @@ export function LiveAudioVisualizer({ stream }: { stream: MediaStream | null }) 
       <div className="flex items-center gap-2 mb-2">
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
         </span>
         <span className="text-xs font-mono text-slate-500 uppercase tracking-widest font-bold">Voice Energetics Waveform</span>
       </div>
@@ -151,6 +151,63 @@ export function LiveAudioVisualizer({ stream }: { stream: MediaStream | null }) 
     </div>
   );
 }
+
+export const resolveHostName = (meeting: any, employees: any[] = [], profile?: any) => {
+  if (!meeting) return 'Unknown Host';
+
+  // 1. Check if meeting has a valid hostName set (and not generic dummy default)
+  if (meeting.hostName && String(meeting.hostName).trim() && meeting.hostName !== 'Anusha Kanna') {
+    return String(meeting.hostName).trim();
+  }
+
+  // 2. Check if meeting has a valid createdBy set
+  if (meeting.createdBy && String(meeting.createdBy).trim() && meeting.createdBy !== 'Anusha Kanna') {
+    return String(meeting.createdBy).trim();
+  }
+
+  // 3. Look up creator in employees directory by UID
+  const creatorId = meeting.creatorId || meeting.userId || meeting.createdByUid;
+  if (creatorId) {
+    const matchedEmp = employees.find((e: any) => e.uid === creatorId || e.id === creatorId);
+    if (matchedEmp && matchedEmp.fullName) {
+      return matchedEmp.fullName;
+    }
+    if (profile && (profile.uid === creatorId || profile.id === creatorId)) {
+      return profile.fullName || profile.displayName || profile.name || 'Host';
+    }
+  }
+
+  // 4. Look up creator by email in employees directory
+  const creatorEmail = String(meeting.creatorEmail || meeting.userEmail || meeting.createdByEmail || '').trim().toLowerCase();
+  if (creatorEmail) {
+    const matchedEmp = employees.find((e: any) => 
+      String(e.email || '').trim().toLowerCase() === creatorEmail ||
+      String(e.personalEmail || '').trim().toLowerCase() === creatorEmail
+    );
+    if (matchedEmp && matchedEmp.fullName) {
+      return matchedEmp.fullName;
+    }
+    if (profile && String(profile.email || '').trim().toLowerCase() === creatorEmail) {
+      return profile.fullName || profile.displayName || profile.name || 'Host';
+    }
+    const emailPrefix = creatorEmail.split('@')[0];
+    if (emailPrefix) {
+      const cleanName = emailPrefix.split('.')[0];
+      return cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+    }
+  }
+
+  // 5. If hostName or createdBy exists explicitly
+  if (meeting.hostName && String(meeting.hostName).trim()) {
+    return String(meeting.hostName).trim();
+  }
+  if (meeting.createdBy && String(meeting.createdBy).trim()) {
+    return String(meeting.createdBy).trim();
+  }
+
+  // 6. Dynamic fallback from logged-in user profile
+  return profile?.fullName || profile?.displayName || 'Host';
+};
 
 export interface MeetingModuleProps {
   profile: any;
@@ -196,6 +253,40 @@ export function MeetingModule({
   const [pastedDriveLink, setPastedDriveLink] = useState('');
   const [isBackupEnabled, setIsBackupEnabled] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [editingHostId, setEditingHostId] = useState<string | null>(null);
+  const [customHostInput, setCustomHostInput] = useState<string>('');
+
+  useEffect(() => {
+    try {
+      const q = query(collection(db, 'employees'), orderBy('fullName', 'asc'));
+      const unsubscribe = onSnapshot(q, (snap) => {
+        setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }, () => {});
+      return unsubscribe;
+    } catch (e) {
+      console.warn('Employees listener error in MeetingModule:', e);
+    }
+  }, []);
+
+  const getHostName = (m: any) => resolveHostName(m, employees, profile);
+
+  const handleSaveHostName = async (meetingId: string, newHost: string) => {
+    const trimmed = newHost.trim();
+    if (!trimmed) return;
+    try {
+      await updateDoc(doc(db, 'meetings', meetingId), {
+        hostName: trimmed,
+        createdBy: trimmed,
+        updatedAt: serverTimestamp()
+      });
+      toast.success(`Meeting host updated to "${trimmed}"`);
+      setEditingHostId(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `meetings/${meetingId}`);
+      toast.error('Failed to update meeting host');
+    }
+  };
 
   const userRole = String(profile?.role || 'employee').toLowerCase();
   const isAdminOrManager = ['admin', 'manager'].includes(userRole);
@@ -213,10 +304,12 @@ export function MeetingModule({
   const filteredMeetings = meetings.filter(meeting => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
+    const host = resolveHostName(meeting).toLowerCase();
     return (
       meeting.title?.toLowerCase().includes(q) ||
       meeting.createdBy?.toLowerCase().includes(q) ||
-      meeting.hostName?.toLowerCase().includes(q)
+      meeting.hostName?.toLowerCase().includes(q) ||
+      host.includes(q)
     );
   });
 
@@ -337,7 +430,8 @@ export function MeetingModule({
           chunkBase64: base64Data,
           mimeType: blob.type,
           chunkIndex: index,
-          meetingId: meetingTempId
+          meetingId: meetingTempId,
+          knownNames: employees?.map((e: any) => e.fullName).join(", ") || ""
         })
       });
 
@@ -607,11 +701,17 @@ export function MeetingModule({
       meetingRefId = meetingRef.id;
 
       const titleToUse = meetingTitle.trim() || `Meeting ${format(new Date(), 'yyyy-MM-dd HH:mm')}`;
+      const currentUserName = profile?.fullName || profile?.displayName || auth.currentUser?.displayName || (auth.currentUser?.email ? auth.currentUser.email.split('@')[0] : 'Host');
+      const currentUserEmail = profile?.email || auth.currentUser?.email || '';
+
       await setDoc(meetingRef, {
         title: titleToUse,
         createdAt: serverTimestamp(),
         status: 'processing',
-        creatorId: auth.currentUser?.uid,
+        creatorId: auth.currentUser?.uid || '',
+        creatorEmail: currentUserEmail,
+        createdBy: currentUserName,
+        hostName: currentUserName,
         duration: duration || 'Unknown',
         audioUrl: `/api/audio/${meetingRefId}`
       });
@@ -716,6 +816,7 @@ export function MeetingModule({
               audioUrl: audioUrl || null,
               driveFileUrl: driveFileUrl || null,
               googleAccessToken: googleAccessToken || null,
+              knownNames: employees?.map((e: any) => e.fullName).join(", ") || "",
               preTranscribedText: Object.keys(chunkTranscriptsRef.current).length > 0 
                 ? Object.keys(chunkTranscriptsRef.current)
                     .map(Number)
@@ -937,11 +1038,17 @@ export function MeetingModule({
       const meetingRef = doc(meetingColRef);
       meetingRefId = meetingRef.id;
 
+      const currentUserName = profile?.fullName || profile?.displayName || auth.currentUser?.displayName || (auth.currentUser?.email ? auth.currentUser.email.split('@')[0] : 'Host');
+      const currentUserEmail = profile?.email || auth.currentUser?.email || '';
+
       await setDoc(meetingRef, {
         title: `Drive Meeting ${format(new Date(), 'yyyy-MM-dd HH:mm')}`,
         createdAt: serverTimestamp(),
         status: 'processing',
-        creatorId: auth.currentUser?.uid,
+        creatorId: auth.currentUser?.uid || '',
+        creatorEmail: currentUserEmail,
+        createdBy: currentUserName,
+        hostName: currentUserName,
         duration: 'Drive File',
         driveFileUrl: pastedDriveLink,
         audioUrl: pastedDriveLink
@@ -961,7 +1068,8 @@ export function MeetingModule({
           meetingId: meetingRefId,
           title: `Drive Meeting ${format(new Date(), 'yyyy-MM-dd HH:mm')}`,
           driveFileUrl: pastedDriveLink,
-          googleAccessToken: googleAccessToken || null
+          googleAccessToken: googleAccessToken || null,
+          knownNames: employees?.map((e: any) => e.fullName).join(", ") || ""
         }),
       });
 
@@ -1173,7 +1281,7 @@ export function MeetingModule({
   };
 
   if (view === 'detail' && selectedMeeting) {
-    return <MeetingDetail meeting={selectedMeeting} onBack={() => setView('list')} onDelete={deleteMeeting} profile={profile} />;
+    return <MeetingDetail meeting={selectedMeeting} onBack={() => setView('list')} onDelete={deleteMeeting} profile={profile} employees={employees} />;
   }
 
   if (initialView === 'record') {
@@ -1188,7 +1296,7 @@ export function MeetingModule({
             value={meetingTitle}
             onChange={(e) => setMeetingTitle(e.target.value)}
             disabled={isRecording || isUploading}
-            className="h-12 text-base rounded-xl border-slate-200 focus:border-brand-orange focus:ring-brand-orange bg-white shadow-sm"
+            className="h-12 text-base rounded-xl border-slate-200 focus:border-blue-600 focus:ring-blue-600 bg-white shadow-sm"
           />
         </div>
 
@@ -1243,8 +1351,8 @@ export function MeetingModule({
               </div>
             ) : isUploading ? (
               <div className="flex flex-col items-center gap-4 py-6 text-center">
-                <div className="w-16 h-16 rounded-full border-4 border-brand-orange/20 border-t-brand-orange animate-spin flex items-center justify-center">
-                  <BrainCircuit className="w-8 h-8 text-brand-orange" />
+                <div className="w-16 h-16 rounded-full border-4 border-blue-600/20 border-t-blue-600 animate-spin flex items-center justify-center">
+                  <BrainCircuit className="w-8 h-8 text-blue-600" />
                 </div>
                 <div className="space-y-1">
                   <p className="font-bold text-slate-800 text-base">{progressLabel || "Processing meeting with AI..."}</p>
@@ -1256,7 +1364,7 @@ export function MeetingModule({
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">READY TO RECORD</span>
                 <button
                   onClick={startRecording}
-                  className="w-20 h-20 rounded-full bg-brand-orange hover:bg-orange-600 active:scale-95 text-white flex items-center justify-center shadow-xl shadow-orange-500/30 transition-all cursor-pointer group"
+                  className="w-20 h-20 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white flex items-center justify-center shadow-xl shadow-blue-500/30 transition-all cursor-pointer group"
                   title="Start Recording"
                 >
                   <Mic className="w-9 h-9 text-white group-hover:scale-110 transition-transform" />
@@ -1317,12 +1425,12 @@ export function MeetingModule({
       </div>
 
       {isRecording && (
-        <Card className="border-orange-200 bg-orange-50/20 shadow-sm overflow-hidden animate-in fade-in duration-300">
-          <CardHeader className="bg-orange-50/50 pb-3 border-b border-orange-100/50">
+        <Card className="border-blue-200 bg-blue-50/20 shadow-sm overflow-hidden animate-in fade-in duration-300">
+          <CardHeader className="bg-blue-50/50 pb-3 border-b border-blue-100/50">
             <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-orange"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-600 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
               </span>
               REAL-TIME INTELLIGENCE FEED
             </CardTitle>
@@ -1333,7 +1441,7 @@ export function MeetingModule({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Captions Stream</span>
                 <div className="flex items-center gap-1.5">
-                  <div className={`h-2 w-2 rounded-full ${transcribingStatus === 'transcribing_live' ? 'bg-orange-500 animate-pulse' : 'bg-green-500 animate-pulse'}`} />
+                  <div className={`h-2 w-2 rounded-full ${transcribingStatus === 'transcribing_live' ? 'bg-blue-500 animate-pulse' : 'bg-green-500 animate-pulse'}`} />
                   <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wide font-bold">
                     {transcribingStatus === 'transcribing_live' ? 'AI Transcribing Live...' : 'Listening...'}
                   </span>
@@ -1352,7 +1460,7 @@ export function MeetingModule({
                       key={caption.index}
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="text-sm leading-relaxed text-slate-700 flex items-start gap-2 border-l-2 border-orange-500/30 pl-2 py-0.5"
+                      className="text-sm leading-relaxed text-slate-700 flex items-start gap-2 border-l-2 border-blue-500/30 pl-2 py-0.5"
                     >
                       <span className="text-[9px] font-mono font-bold text-slate-400 mt-1 uppercase shrink-0">[{formatTime(caption.index * CHUNK_DURATION_SEC)}]</span>
                       <p className="flex-1 font-medium">{caption.text}</p>
@@ -1369,22 +1477,105 @@ export function MeetingModule({
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="animate-spin h-3.5 w-3.5 border-2 border-brand-orange border-t-transparent rounded-full" />
+              <div className="animate-spin h-3.5 w-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
               <span className="text-sm font-bold text-slate-700">{progressLabel || 'Processing...'}</span>
             </div>
             <span className="text-xs font-mono font-bold text-slate-500">{uploadProgress}%</span>
           </div>
           <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
             <div 
-              className="h-full bg-brand-orange transition-all duration-300 rounded-full" 
+              className="h-full bg-blue-600 transition-all duration-300 rounded-full" 
               style={{ width: `${uploadProgress}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* Meetings Table View matching reference image */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+      {/* Meetings Dual View: Cards on Mobile (< md), Data Table on Desktop (>= md) */}
+      
+      {/* Mobile Card List (< md) */}
+      <div className="md:hidden space-y-3">
+        {filteredMeetings.length === 0 ? (
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-8 text-center text-slate-400">
+            <FileAudio className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+            <p className="font-semibold text-sm">No meetings found.</p>
+          </div>
+        ) : (
+          filteredMeetings.map((meeting) => {
+            const dateStr = meeting.createdAt?.toDate 
+              ? format(meeting.createdAt.toDate(), 'MMM d, yyyy, hh:mm a') 
+              : 'Jul 21, 2026, 12:57 PM';
+            const hostName = resolveHostName(meeting);
+            const firstChar = hostName.charAt(0).toUpperCase() || 'H';
+
+            return (
+              <div
+                key={meeting.id}
+                onClick={() => handleOpenMeetingDetail(meeting.id)}
+                className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs hover:border-blue-300 transition-all cursor-pointer active:scale-[0.99] space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                      <Video className="w-4.5 h-4.5 text-blue-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-900 text-sm leading-tight truncate">{meeting.title}</h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{dateStr}</p>
+                    </div>
+                  </div>
+
+                  {/* Status Badge */}
+                  {meeting.status === 'processing' ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200 shrink-0">
+                      <span className="animate-spin h-2 w-2 border-2 border-amber-600 border-t-transparent rounded-full" /> Processing
+                    </span>
+                  ) : meeting.status === 'failed' ? (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200 shrink-0">
+                      Failed
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                      Completed
+                    </span>
+                  )}
+                </div>
+
+                {/* Host & Actions Footer */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                  <div className="flex items-center gap-2 min-w-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-[10px] shrink-0">
+                      {firstChar}
+                    </div>
+                    <span className="text-slate-600 font-medium truncate max-w-[140px]">{hostName}</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => handleOpenMeetingDetail(meeting.id)}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-xs transition-colors flex items-center gap-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> View
+                    </button>
+                    {isAdminOrManager && (
+                      <button
+                        onClick={(e) => deleteMeeting(meeting.id, e)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Meeting"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Desktop Data Table (>= md) */}
+      <div className="hidden md:block bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -1415,26 +1606,43 @@ export function MeetingModule({
                     ? format(meeting.createdAt.toDate(), 'MMM d, yyyy, hh:mm a') 
                     : 'Jul 21, 2026, 12:57 PM';
 
-                  const hostName = meeting.hostName || meeting.createdBy || 'Anusha Kanna';
-                  const firstChar = hostName.charAt(0).toUpperCase() || 'A';
+                  const hostName = resolveHostName(meeting);
+                  const firstChar = hostName.charAt(0).toUpperCase() || 'H';
 
                   return (
                     <tr key={meeting.id} className="hover:bg-slate-50/60 transition-colors cursor-pointer" onClick={() => handleOpenMeetingDetail(meeting.id)}>
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-orange-100/60 text-brand-orange flex items-center justify-center shrink-0">
-                            <Video className="w-4 h-4 text-orange-500" />
+                          <div className="w-8 h-8 rounded-lg bg-blue-100/60 text-blue-600 flex items-center justify-center shrink-0">
+                            <Video className="w-4 h-4 text-blue-500" />
                           </div>
-                          <span className="font-bold text-slate-900 hover:text-brand-orange transition-colors">{meeting.title}</span>
+                          <span className="font-bold text-slate-900 hover:text-blue-600 transition-colors">{meeting.title}</span>
                         </div>
                       </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-2.5 text-slate-700">
-                          <div className="w-7 h-7 rounded-full bg-blue-100/70 text-blue-600 font-bold flex items-center justify-center text-xs shrink-0">
-                            {firstChar}
+                      <td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
+                        {editingHostId === meeting.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              defaultValue={hostName}
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveHostName(meeting.id, (e.target as HTMLInputElement).value);
+                                if (e.key === 'Escape') setEditingHostId(null);
+                              }}
+                              onBlur={(e) => handleSaveHostName(meeting.id, e.target.value)}
+                              className="text-xs bg-white border border-blue-400 rounded px-2 py-1 text-slate-900 font-medium outline-none shadow-sm"
+                            />
                           </div>
-                          <span className="text-sm font-medium text-slate-800">{hostName}</span>
-                        </div>
+                        ) : (
+                          <div className="flex items-center gap-2.5 text-slate-700 group cursor-pointer" title="Click to edit meeting host" onClick={() => setEditingHostId(meeting.id)}>
+                            <div className="w-7 h-7 rounded-full bg-blue-100/70 text-blue-600 font-bold flex items-center justify-center text-xs shrink-0">
+                              {firstChar}
+                            </div>
+                            <span className="text-sm font-medium text-slate-800 group-hover:text-blue-600 transition-colors">{hostName}</span>
+                            <span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">✏️</span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-4 px-6 text-slate-500 text-xs font-medium">
                         {dateStr}
@@ -1586,7 +1794,7 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-        <div className="w-6 h-6 rounded-lg bg-orange-100/70 text-orange-500 flex items-center justify-center text-xs">
+        <div className="w-6 h-6 rounded-lg bg-blue-100/70 text-blue-500 flex items-center justify-center text-xs">
           🎙️
         </div>
         Meeting Audio Recording
@@ -1595,7 +1803,7 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
       {isDriveUrl ? (
         /* Drive file — cannot stream directly, show open link */
         <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex flex-col items-center gap-3 text-center">
-          <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-2xl">🎵</div>
+          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-2xl">🎵</div>
           <p className="text-xs text-slate-500 font-medium leading-relaxed">
             This meeting's audio is stored on Google Drive.<br />
             Click below to open and play it directly in Drive.
@@ -1630,7 +1838,7 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
             {/* Play / Pause button */}
             <button
               onClick={togglePlay}
-              className="w-11 h-11 rounded-full bg-orange-500 hover:bg-orange-600 flex items-center justify-center text-white shadow-lg transition-all active:scale-95 shrink-0"
+              className="w-11 h-11 rounded-full bg-blue-500 hover:bg-blue-700 flex items-center justify-center text-white shadow-lg transition-all active:scale-95 shrink-0"
             >
               {isPlaying ? (
                 <Square className="w-4 h-4 fill-white" />
@@ -1671,7 +1879,7 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
             <div className="absolute w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
               {/* Fill track */}
               <div
-                className="absolute left-0 top-0 h-full bg-orange-500 rounded-full transition-all pointer-events-none"
+                className="absolute left-0 top-0 h-full bg-blue-500 rounded-full transition-all pointer-events-none"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -1700,7 +1908,7 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
                 step={0.05}
                 value={volume}
                 onChange={handleVolumeChange}
-                className="w-20 accent-orange-500 cursor-pointer"
+                className="w-20 accent-blue-500 cursor-pointer"
               />
               <span className="text-xs text-slate-400 font-mono w-7">{Math.round(volume * 100)}%</span>
             </div>
@@ -1709,7 +1917,7 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
             <a
               href={audioUrl}
               download={`${title || 'meeting'}_recording.webm`}
-              className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-orange-600 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-700 transition-colors"
             >
               <Download className="w-3.5 h-3.5" /> Download Audio
             </a>
@@ -1726,17 +1934,41 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
   );
 }
 
-function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, onBack: () => void, onDelete: (id: string) => void, profile?: any }) {
+function MeetingDetail({ meeting, onBack, onDelete, profile, employees = [] }: { meeting: any, onBack: () => void, onDelete: (id: string) => void, profile?: any, employees?: any[] }) {
   const userRole = String(profile?.role || 'employee').toLowerCase();
   const isAdminOrManager = ['admin', 'manager'].includes(userRole);
   const [activeTab, setActiveTab] = useState<'mom' | 'transcript' | 'tasks' | 'ask'>('mom');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [retryingUpload, setRetryingUpload] = useState(false);
   const [currentMeeting, setCurrentMeeting] = useState(meeting);
+  const [isEditingHost, setIsEditingHost] = useState(false);
+  const [customHostInput, setCustomHostInput] = useState('');
 
   useEffect(() => {
     setCurrentMeeting(meeting);
   }, [meeting]);
+
+  const handleSaveHostNameDetail = async (newHost: string) => {
+    const trimmed = newHost.trim();
+    if (!trimmed) return;
+    try {
+      await updateDoc(doc(db, 'meetings', currentMeeting.id), {
+        hostName: trimmed,
+        createdBy: trimmed,
+        updatedAt: serverTimestamp()
+      });
+      setCurrentMeeting((prev: any) => ({
+        ...prev,
+        hostName: trimmed,
+        createdBy: trimmed
+      }));
+      toast.success(`Meeting host updated to "${trimmed}"`);
+      setIsEditingHost(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `meetings/${currentMeeting.id}`);
+      toast.error('Failed to update meeting host');
+    }
+  };
 
   const handleLocalRetryUpload = async () => {
     setRetryingUpload(true);
@@ -1790,6 +2022,22 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
 
       let y = 25; // tracking y coordinate
 
+      // Fetch logo as base64 for PDF
+      let logoBase64: string | null = null;
+      try {
+        const resLogo = await fetch('/arkoo_logo.png');
+        if (resLogo.ok) {
+          const blobLogo = await resLogo.blob();
+          logoBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blobLogo);
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to load logo for PDF", err);
+      }
+
       // Helper to add clean headers on every page except page 1
       const addTableHeader = (document: jsPDF, pageNum: number) => {
         document.setFont("helvetica", "normal");
@@ -1804,22 +2052,35 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
 
       // Helper to print auto-wrapped blocks of text with page-breaking
       const printBlock = (text: string, isBold = false, fontSize = 10, offsetAfter = 6, fontStyle = "normal") => {
-        doc.setFont("helvetica", fontStyle);
-        if (isBold) {
-          doc.setFont("helvetica", "bold");
-        }
-        doc.setFontSize(fontSize);
-        doc.setTextColor(51, 65, 85); // Slate gray body
-        
-        const lines = doc.splitTextToSize(text, contentWidth);
-        for (const line of lines) {
-          if (y > 275) {
-            doc.addPage();
-            y = 25;
-            addTableHeader(doc, doc.internal.pages.length - 1);
+        const applyFontState = () => {
+          doc.setFont("helvetica", fontStyle);
+          if (isBold) {
+            doc.setFont("helvetica", "bold");
           }
-          doc.text(line, margin, y);
-          y += 5.5;
+          doc.setFontSize(fontSize);
+          doc.setTextColor(51, 65, 85); // Slate gray body
+        };
+        applyFontState();
+        
+        const paragraphs = text.split('\n');
+        for (const para of paragraphs) {
+          if (para.trim() === '') {
+            y += 3; // Space for empty lines
+            continue;
+          }
+          
+          const lines = doc.splitTextToSize(para, contentWidth);
+          for (const line of lines) {
+            if (y > 275) {
+              doc.addPage();
+              y = 25;
+              addTableHeader(doc, doc.internal.pages.length - 1);
+              applyFontState(); // Restore state after header overrides it
+            }
+            doc.text(line, margin, y);
+            y += 5.5; // Line height
+          }
+          y += 2; // Extra space after each paragraph block
         }
         y += offsetAfter;
       };
@@ -1849,17 +2110,23 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
       doc.rect(0, 0, pageWidth, 8, "F");
 
       // Company Brand
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(234, 88, 12); // Brand Orange
-      doc.text("ARKOO PREBUILD PVT. LTD.", margin, y);
-      y += 5;
+      if (logoBase64) {
+        // Adjust width based on aspect ratio (Arkoo logo is wide)
+        doc.addImage(logoBase64, "PNG", margin, y - 5, 45, 11);
+        y += 12; // Increased spacing to prevent overlap with title
+      } else {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(234, 88, 12); // Brand Orange
+        doc.text("ARKOO PREBUILD PVT. LTD.", margin, y);
+        y += 7;
+      }
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
       doc.setTextColor(15, 23, 42); // slate-900
       doc.text("AI MEETING INTELLIGENCE REPORT", margin, y);
-      y += 12;
+      y += 6;
 
       // Draw horizontal separator
       doc.setDrawColor(226, 232, 240); // slate-200
@@ -1869,10 +2136,6 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
 
       // Metadata card grid
       doc.setFillColor(248, 250, 252); // slate-50 background
-      doc.rect(margin, y, contentWidth, 42, "F");
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.3);
-      doc.rect(margin, y, contentWidth, 42, "S");
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
@@ -1883,47 +2146,121 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
         meetingDateStr = meeting.createdAt.toDate ? format(meeting.createdAt.toDate(), 'PPP p') : format(new Date(meeting.createdAt), 'PPP p');
       }
 
-      const participantsList = (meeting.participants && Array.isArray(meeting.participants)) 
-        ? meeting.participants.join(", ")
-        : "Site Manager, Safety Officer, Civil Engineer, Stakeholders";
+      const hostName = resolveHostName(meeting, employees, profile);
+      
+      let allParticipants: string[] = [];
+      if (meeting.participants && Array.isArray(meeting.participants)) {
+        // Exclude host from the AI participants list to avoid duplicates
+        allParticipants = meeting.participants.filter((p: string) => 
+          p.toLowerCase() !== hostName.toLowerCase() && 
+          p.toLowerCase() !== `${hostName} (host)`.toLowerCase()
+        );
+      }
+      
+      allParticipants.push(`${hostName} (Host)`);
+      const totalPersons = allParticipants.length;
+      const participantsList = `${allParticipants.join(", ")} (${totalPersons} Total Person${totalPersons > 1 ? 's' : ''})`;
 
-      doc.text(`Meeting Title: ${meeting.title || 'Untitled Meeting'}`, margin + 5, y + 8);
-      doc.text(`Date & Time: ${meetingDateStr}`, margin + 5, y + 16);
-      doc.text(`Duration: ${meeting.duration || '15 mins'} (Voice Captured)`, margin + 5, y + 24);
-      doc.text(`Participants: ${participantsList}`, margin + 5, y + 32);
-      doc.text(`AI Intelligence Engine: Gemini Core Active`, margin + 5, y + 38);
-      y += 52;
+      const titleLines = doc.splitTextToSize(`Meeting Title: ${meeting.title || 'Untitled Meeting'}`, contentWidth - 10);
+      const participantsLines = doc.splitTextToSize(`Participants: ${participantsList}`, contentWidth - 10);
+
+      let textY = y + 8;
+      const titleOffset = (titleLines.length * 5) + 3;
+      const participantsOffset = (participantsLines.length * 5) + 3;
+      
+      const boxHeight = 8 + titleOffset + 8 + 8 + participantsOffset;
+
+      doc.rect(margin, y, contentWidth, boxHeight, "F");
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.rect(margin, y, contentWidth, boxHeight, "S");
+
+      doc.text(titleLines, margin + 5, textY);
+      textY += titleOffset;
+
+      doc.text(`Date & Time: ${meetingDateStr}`, margin + 5, textY);
+      textY += 8;
+
+      doc.text(`Duration: ${meeting.duration || '15 mins'} (Voice Captured)`, margin + 5, textY);
+      textY += 8;
+
+      doc.text(participantsLines, margin + 5, textY);
+      
+      y += boxHeight + 10;
+
+      // Helper to handle characters that jsPDF's built-in Helvetica cannot render
+      const sanitizeForPdf = (text: string, isTranscript = false) => {
+        if (!text) return "";
+        const hasDevanagari = /[\u0900-\u097F]/.test(text);
+        
+        if (isTranscript && hasDevanagari) {
+          return "[ The original transcript contains local language text (Hindi/Marathi) which cannot be rendered in this PDF format. Please view the full transcript in the web dashboard. ]";
+        }
+        
+        let sanitized = text.replace(/•/g, "-");
+        // Silently remove all other non-ASCII characters to prevent tag spamming
+        sanitized = sanitized.replace(/[^\x00-\x7F]+/g, " ");
+        // Clean up weird horizontal spacing left behind, preserving newlines
+        sanitized = sanitized.replace(/[ \t]+/g, " ").trim();
+        
+        return sanitized;
+      };
 
       // Executive Summary Section
       printSectionHeader("Executive Summary");
-      printBlock(meeting.summary || "No summary was generated during analytical collection.", false, 10, 6, "normal");
+      printBlock(sanitizeForPdf(meeting.summary || "No summary was generated during analytical collection."), false, 10, 6, "normal");
 
       // Minutes of Meeting (MOM) Section
       printSectionHeader("Minutes of Meeting (MOM)");
       
-      // Since MOM is markdown formatted, let's clean up headers for raw TXT presentation
-      const rawMom = (meeting.mom || "No MOM is available.")
-        .replace(/###/g, "  •")
-        .replace(/##/g, "")
-        .replace(/#/g, "")
-        .replace(/\*\*/g, "");
-      printBlock(rawMom, false, 9.5, 10);
+      // Since MOM can be a markdown string or a structured object, handle both
+      let rawMomStr = "No MOM is available.";
+      if (meeting.momText) {
+        rawMomStr = meeting.momText;
+      } else if (typeof meeting.mom === 'string') {
+        rawMomStr = meeting.mom;
+      } else if (meeting.mom && typeof meeting.mom === 'object') {
+        const m = meeting.mom;
+        const agenda = m.agenda && m.agenda.length ? `Agenda:\n• ${m.agenda.join("\n• ")}\n\n` : "";
+        const discussions = m.discussionPoints && m.discussionPoints.length 
+          ? `Discussion Points:\n` + m.discussionPoints.map((dp: any) => `• ${dp.topic}: ${dp.summary}`).join("\n") + `\n\n`
+          : "";
+        const decisions = m.keyDecisions && m.keyDecisions.length ? `Key Decisions:\n• ${m.keyDecisions.join("\n• ")}\n\n` : "";
+        const risks = m.risks && m.risks.length ? `Risks:\n• ${m.risks.join("\n• ")}\n\n` : "";
+        const nextSteps = m.nextSteps && m.nextSteps.length ? `Next Steps:\n• ${m.nextSteps.join("\n• ")}\n\n` : "";
+        rawMomStr = agenda + discussions + decisions + risks + nextSteps;
+      }
+
+      const rawMom = rawMomStr
+        .replace(/### (.*)/g, "\n$1\n") // Convert Markdown H3 to padded string
+        .replace(/## (.*)/g, "\n$1\n") // Convert Markdown H2
+        .replace(/# (.*)/g, "\n$1\n")
+        .replace(/\*\*(.*?)\*\*/g, "$1") // Remove bold
+        .replace(/\*(.*?)\*/g, "$1");
+      
+      printBlock(sanitizeForPdf(rawMom), false, 9.5, 10);
 
       // Task Allocation Section
       printSectionHeader("Action Item & Task Allocation");
 
       if (meetingTasks.length > 0) {
         meetingTasks.forEach((task: any, idx: number) => {
-          if (y > 245) {
+          const descText = task.description || 'No detailed instructions provided.';
+          const instructionLines = doc.splitTextToSize(`Instruction: ${sanitizeForPdf(descText)}`, contentWidth - 8);
+          
+          const boxHeight = 20 + (instructionLines.length * 4.5);
+          
+          if (y + boxHeight > 275) {
             doc.addPage();
             y = 25;
             addTableHeader(doc, doc.internal.pages.length - 1);
           }
+          
           doc.setFillColor(248, 250, 252); // slate-50 card style
-          doc.rect(margin, y, contentWidth, 24, "F");
+          doc.rect(margin, y, contentWidth, boxHeight, "F");
           doc.setDrawColor(226, 232, 240);
           doc.setLineWidth(0.2);
-          doc.rect(margin, y, contentWidth, 24, "S");
+          doc.rect(margin, y, contentWidth, boxHeight, "S");
           
           doc.setFont("helvetica", "bold");
           doc.setFontSize(10);
@@ -1935,11 +2272,13 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
           doc.setTextColor(71, 85, 105);
           doc.text(`Assignee: ${task.assigneeName || 'Unassigned'} | Department: ${task.department || 'General'} | Deadline: ${formatDeadlineDisplay(task.deadline)}`, margin + 4, y + 12);
           
-          const descText = task.description || 'No detailed instructions provided.';
-          const truncatedDesc = descText.length > 115 ? descText.substring(0, 112) + "..." : descText;
-          doc.text(`Instruction: ${truncatedDesc}`, margin + 4, y + 18);
+          let lineY = y + 18;
+          for (const line of instructionLines) {
+            doc.text(line, margin + 4, lineY);
+            lineY += 4.5;
+          }
           
-          y += 28;
+          y += boxHeight + 4;
         });
       } else {
         printBlock("No dedicated action items or structured tasks were extracted from this conversation.", false, 10, 6, "italic");
@@ -1947,7 +2286,10 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
 
       // Full Transcript Section
       printSectionHeader("Full Meeting Transcript");
-      printBlock(meeting.transcript || "No visual transcript data was available.", false, 9, 8);
+      
+      // Filter the transcript for jsPDF so it doesn't print gibberish for legacy Devanagari text
+      const transcriptText = sanitizeForPdf(meeting.transcript || "No visual transcript data was available.", true);
+      printBlock(transcriptText, false, 9, 8);
 
       // Footer brand signature
       if (y > 260) {
@@ -1976,27 +2318,29 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
         const dateStr = format(new Date(), 'yyyy-MM-dd');
         const pdfPath = `reports/${dateStr}/report_${meeting.id}_${Date.now()}.pdf`;
         const storageRef = ref(storage, pdfPath);
-        const uploadSnapshot = await uploadBytes(storageRef, pdfBlob);
-        const pdfUrl = await getDownloadURL(uploadSnapshot.ref);
         
-        console.log("Successfully uploaded PDF report to Firebase Storage:", pdfUrl);
-        toast.success("Synchronized secure PDF backup to cloud storage!");
+        // Fire-and-forget background upload so UI isn't blocked by Firebase connection/rules issues
+        uploadBytes(storageRef, pdfBlob).then(async (uploadSnapshot) => {
+          const pdfUrl = await getDownloadURL(uploadSnapshot.ref);
+          console.log("Successfully uploaded PDF report to Firebase Storage:", pdfUrl);
+          toast.success("Synchronized secure PDF backup to cloud storage!");
+          
+          meeting.pdfUrl = pdfUrl;
+          try {
+            await updateDoc(firestoreDoc(db, "meetings", meeting.id), { pdfUrl: pdfUrl });
+            console.log("Successfully updated pdfUrl on meeting document!");
+          } catch (dbErr) {
+            console.warn("pdfUrl update failed on client side:", dbErr);
+          }
+        }).catch(err => {
+          console.error("Error uploading report PDF to Firebase Storage in background:", err);
+        });
         
-        meeting.pdfUrl = pdfUrl;
-        
-        try {
-          await updateDoc(firestoreDoc(db, "meetings", meeting.id), {
-            pdfUrl: pdfUrl
-          });
-          console.log("Successfully updated pdfUrl on meeting document!");
-        } catch (dbErr) {
-          console.warn("pdfUrl update failed on client side:", dbErr);
-        }
       } catch (pdfUploadErr: any) {
-        console.error("Error uploading report PDF to Firebase Storage:", pdfUploadErr);
+        console.error("Error preparing report PDF upload:", pdfUploadErr);
       }
 
-} catch (err: any) {
+    } catch (err: any) {
       console.error("Report PDF compilation failed:", err);
       toast.error(`Report generation failed: ${err.message || 'Unknown error'}`, { id: loadingToast });
     } finally {
@@ -2029,7 +2373,7 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
     ? format(currentMeeting.createdAt.toDate(), 'hh:mm a') 
     : '12:00 PM';
 
-  const hostName = currentMeeting.hostName || currentMeeting.createdBy || 'Anusha Kanna';
+  const hostName = resolveHostName(currentMeeting, employees, profile);
 
   // For legacy meetings (old markdown mom format), build participants from available sources:
   // host name + unique task assignee names extracted from Firestore (passed via prop below)
@@ -2089,7 +2433,7 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
           {/* Participants (top) */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center gap-2 text-slate-800 font-bold text-sm mb-3">
-              <User className="w-4 h-4 text-orange-500" />
+              <User className="w-4 h-4 text-blue-500" />
               Participants ({displayParticipants.length})
             </div>
             {displayParticipants.length === 0 ? (
@@ -2104,27 +2448,79 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
           {/* Minutes of Meeting (MOM) */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-5">
             <div className="flex items-center gap-2 text-slate-900 font-bold text-base border-b border-slate-100 pb-4">
-              <div className="w-6 h-6 rounded-lg bg-orange-100/70 text-orange-500 flex items-center justify-center text-sm">📄</div>
+              <div className="w-6 h-6 rounded-lg bg-blue-100/70 text-blue-500 flex items-center justify-center text-sm">📄</div>
               Minutes of Meeting (MOM)
             </div>
 
             {/* MOM Meta Bar */}
-            <div className="grid grid-cols-4 gap-0 bg-slate-50/80 rounded-xl border border-slate-100 divide-x divide-slate-100 overflow-hidden">
-              <div className="p-4 space-y-1">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider"># MEETING TITLE</div>
-                <div className="text-sm font-bold text-slate-900 truncate">{currentMeeting.title}</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-0 bg-slate-50/80 rounded-xl border border-slate-100 sm:divide-x divide-slate-100 overflow-hidden p-2 sm:p-0">
+              <div className="p-3 sm:p-4 space-y-1 bg-white sm:bg-transparent rounded-lg sm:rounded-none border sm:border-0 border-slate-100">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider"># TITLE</div>
+                <div className="text-xs sm:text-sm font-bold text-slate-900 truncate">{currentMeeting.title}</div>
               </div>
-              <div className="p-4 space-y-1">
+              <div className="p-3 sm:p-4 space-y-1 bg-white sm:bg-transparent rounded-lg sm:rounded-none border sm:border-0 border-slate-100">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">📅 DATE</div>
-                <div className="text-sm font-bold text-slate-900">{momDateStr}</div>
+                <div className="text-xs sm:text-sm font-bold text-slate-900">{momDateStr}</div>
               </div>
-              <div className="p-4 space-y-1">
+              <div className="p-3 sm:p-4 space-y-1 bg-white sm:bg-transparent rounded-lg sm:rounded-none border sm:border-0 border-slate-100">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">🕐 TIME</div>
-                <div className="text-sm font-bold text-slate-900">{momTimeStr}</div>
+                <div className="text-xs sm:text-sm font-bold text-slate-900">{momTimeStr}</div>
               </div>
-              <div className="p-4 space-y-1">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">👤 MEETING HOST</div>
-                <div className="text-sm font-bold text-slate-900">{hostName}</div>
+              <div className="p-3 sm:p-4 space-y-1 bg-white sm:bg-transparent rounded-lg sm:rounded-none border sm:border-0 border-slate-100 relative group">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>👤 MEETING HOST</span>
+                  {!isEditingHost && (
+                    <button 
+                      onClick={() => {
+                        setIsEditingHost(true);
+                        setCustomHostInput(hostName);
+                      }}
+                      className="text-[10px] text-blue-600 hover:underline font-semibold"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+                {isEditingHost ? (
+                  <div className="flex flex-col gap-1 mt-1">
+                    <input
+                      type="text"
+                      value={customHostInput}
+                      onChange={(e) => setCustomHostInput(e.target.value)}
+                      placeholder="Enter host name..."
+                      className="text-xs bg-white border border-blue-400 rounded px-2 py-1 text-slate-900 font-semibold focus:ring-1 focus:ring-blue-500 outline-none w-full"
+                    />
+                    {employees.length > 0 && (
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) setCustomHostInput(e.target.value);
+                        }}
+                        className="text-[11px] bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 outline-none w-full"
+                      >
+                        <option value="">Choose from directory...</option>
+                        {employees.map(e => (
+                          <option key={e.id} value={e.fullName}>{e.fullName}</option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <button
+                        onClick={() => handleSaveHostNameDetail(customHostInput)}
+                        className="text-[11px] bg-blue-600 text-white px-2 py-0.5 rounded font-bold hover:bg-blue-700"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setIsEditingHost(false)}
+                        className="text-[11px] text-slate-500 hover:text-slate-800 px-1"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm font-bold text-slate-900 truncate" title={hostName}>{hostName}</div>
+                )}
               </div>
             </div>
 
@@ -2133,7 +2529,7 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-semibold text-sm text-slate-800">
-                    <User className="w-4 h-4 text-orange-500" /> Participants
+                    <User className="w-4 h-4 text-blue-500" /> Participants
                   </div>
                   <span className="text-xs text-slate-400 font-medium">{displayParticipants.length} {displayParticipants.length === 1 ? 'person' : 'people'}</span>
                 </div>
@@ -2159,7 +2555,7 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
                 <ol className="space-y-1.5">
                   {agenda.map((item, i) => (
                     <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
-                      <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
                       <span className="font-medium">{item}</span>
                     </li>
                   ))}
@@ -2178,7 +2574,7 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
                     <div key={i} className="space-y-1.5">
                       <div className="font-bold text-sm text-slate-900">{dp.topic}</div>
                       {dp.summary && (
-                        <div className="text-xs text-orange-500 font-medium italic">{dp.summary}</div>
+                        <div className="text-xs text-blue-500 font-medium italic">{dp.summary}</div>
                       )}
                       <ul className="space-y-1">
                         {(dp.points || []).map((pt, j) => (
@@ -2191,6 +2587,17 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
                     </div>
                   ))}
                 </div>
+
+                {/* Meeting Recording for A — embedded inside Discussion Points */}
+                {currentMeeting.audioUrl && (
+                  <div className="mt-4 border-t border-slate-100 pt-4">
+                    <div className="flex items-center gap-2 text-slate-700 font-semibold text-xs mb-3">
+                      <span className="text-sm">🎙️</span>
+                      <span className="uppercase tracking-wider">Meeting Recording for A</span>
+                    </div>
+                    <MeetingAudioPlayer audioUrl={currentMeeting.audioUrl} title={currentMeeting.title} />
+                  </div>
+                )}
               </div>
             )}
 
@@ -2251,7 +2658,7 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
           {nextSteps.length > 0 && (
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-3">
               <div className="flex items-center gap-2 font-semibold text-sm text-slate-800">
-                <span className="text-base text-orange-500">→</span> Next Steps
+                <span className="text-base text-blue-500">→</span> Next Steps
               </div>
               <ol className="space-y-1.5">
                 {nextSteps.map((step: string, i: number) => (
@@ -2270,18 +2677,23 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
           {/* Full Transcript Card */}
           {currentMeeting.transcript && (
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-3">
-              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                <div className="w-6 h-6 rounded-lg bg-blue-100/70 text-blue-500 flex items-center justify-center text-xs">💬</div>
-                Full Meeting Transcript
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                  <div className="w-6 h-6 rounded-lg bg-blue-100/70 text-blue-500 flex items-center justify-center text-xs">💬</div>
+                  Full Meeting Transcript
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
+                  Word-to-word verbatim · unclear words shown as ....
+                </span>
               </div>
-              <div className="bg-slate-900 text-slate-200 font-mono text-xs p-4 rounded-xl max-h-80 overflow-y-auto leading-relaxed whitespace-pre-wrap">
+              <div className="bg-slate-900 text-slate-200 font-mono text-xs p-4 rounded-xl leading-relaxed whitespace-pre-wrap">
                 {currentMeeting.transcript}
               </div>
             </div>
           )}
 
-          {/* Meeting Audio Player */}
-          {currentMeeting.audioUrl && (
+          {/* Meeting Audio Player — shown standalone only when no discussionPoints exist */}
+          {currentMeeting.audioUrl && discussionPoints.length === 0 && (
             <MeetingAudioPlayer audioUrl={currentMeeting.audioUrl} title={currentMeeting.title} />
           )}
         </div>
@@ -2331,8 +2743,8 @@ function MeetingDetail({ meeting, onBack, onDelete, profile }: { meeting: any, o
 
           {/* Executive Summary */}
           {currentMeeting.summary && (
-            <div className="bg-orange-50/60 border border-orange-100 rounded-2xl p-5 shadow-sm">
-              <div className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-2">Executive Summary</div>
+            <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 shadow-sm">
+              <div className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2">Executive Summary</div>
               <p className="text-xs text-slate-700 leading-relaxed font-medium">{currentMeeting.summary}</p>
             </div>
           )}
@@ -2361,13 +2773,13 @@ function MeetingTasksSidebar({ meetingId, status }: { meetingId: string; status:
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
       <div className="flex items-center gap-2 text-slate-900 font-bold text-sm border-b border-slate-100 pb-3 mb-3">
-        <CheckCircle2 className="w-4 h-4 text-orange-500" />
+        <CheckCircle2 className="w-4 h-4 text-blue-500" />
         Tasks ({tasks.length})
       </div>
 
       {status === 'processing' ? (
         <div className="text-xs text-slate-400 text-center py-4 flex flex-col items-center gap-2">
-          <span className="animate-spin h-4 w-4 border-2 border-brand-orange border-t-transparent rounded-full" />
+          <span className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full" />
           Extracting tasks from recording...
         </div>
       ) : tasks.length === 0 ? (
@@ -2479,7 +2891,7 @@ function MeetingSummaryStats({ meetingId, keyDecisions, participants }: { meetin
   }, [meetingId]);
 
   const stats = [
-    { label: 'Total Tasks', value: taskStats.total, color: 'text-orange-500' },
+    { label: 'Total Tasks', value: taskStats.total, color: 'text-blue-500' },
     { label: 'High Priority', value: taskStats.high, color: 'text-red-500' },
     { label: 'With Deadlines', value: taskStats.withDeadlines, color: 'text-amber-500' },
     { label: 'Decisions Made', value: keyDecisions.length, color: 'text-emerald-600' },
@@ -2549,12 +2961,12 @@ function MeetingAIChat({ meeting }: { meeting: any }) {
     <div className="flex flex-col h-[500px] bg-slate-50 rounded-3xl border border-slate-200 overflow-hidden shadow-inner">
       <div className="p-6 border-b bg-white flex items-center justify-between">
          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-brand-orange flex items-center justify-center text-white">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white">
                <BrainCircuit className="w-4 h-4" />
             </div>
             <div>
                <p className="text-xs font-black text-slate-900 uppercase tracking-widest">Meeting AI Assistant</p>
-               <p className="text-[10px] text-brand-orange font-bold uppercase tracking-widest">Active & Informed</p>
+               <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">Active & Informed</p>
             </div>
          </div>
       </div>

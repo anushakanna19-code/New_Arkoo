@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { doc, updateDoc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
-import { db, authenticateGoogleDrive } from '@/lib/firebase';
+import { updateProfile } from 'firebase/auth';
+import { db, authenticateGoogleDrive, auth } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Bell, Shield, User, Globe, MessageSquare, Activity, KeyRound, AlertTriangle, CheckCircle2, RefreshCw, Layers, Users, Plus, X, ChevronDown, Cpu, Zap } from 'lucide-react';
+import { Bell, Shield, User, Globe, MessageSquare, Activity, KeyRound, AlertTriangle, CheckCircle2, RefreshCw, Layers, Users, Plus, X, ChevronDown, Cpu, Zap, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 
@@ -164,7 +165,7 @@ function StakeholderOptionsEditor() {
           className="w-full flex items-center justify-between text-left"
         >
           <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-brand-orange" />
+            <Users className="w-5 h-5 text-blue-600" />
             <div>
               <CardTitle className="text-lg font-bold">Stakeholder Form Options</CardTitle>
               <p className="text-xs text-slate-500 mt-0.5 font-normal">
@@ -210,13 +211,15 @@ export interface SettingsModuleProps {
   };
   onAuthorizeDrive?: () => void;
   onDisconnectDrive?: () => void;
+  onProfileUpdate?: (updates: any) => void;
 }
 
 export function SettingsModule({ 
   profile,
   gdriveState = { connected: false },
   onAuthorizeDrive = () => {},
-  onDisconnectDrive = () => {}
+  onDisconnectDrive = () => {},
+  onProfileUpdate
 }: SettingsModuleProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -229,14 +232,14 @@ export function SettingsModule({
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [savingKey, setSavingKey] = useState(false);
 
-  const handleSaveGeminiKey = async () => {
+  const handleSaveOpenaiKey = async () => {
     if (!apiKeyInput.trim()) {
-      toast.error('Please enter a valid Gemini API Key.');
+      toast.error('Please enter a valid OpenAI API Key.');
       return;
     }
     setSavingKey(true);
     try {
-      const res = await fetch('/api/gemini/save-key', {
+      const res = await fetch('/api/openai/save-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: apiKeyInput })
@@ -249,14 +252,14 @@ export function SettingsModule({
       } catch (e) {}
 
       if (res.ok && data.success) {
-        toast.success('Gemini API Key saved successfully!');
+        toast.success('OpenAI API Key saved successfully!');
         setApiKeyInput('');
         performDiagnostic();
       } else {
-        throw new Error(data.error || 'Failed to save Gemini API Key');
+        throw new Error(data.error || 'Failed to save OpenAI API Key');
       }
     } catch (err: any) {
-      toast.error(err.message || 'Failed to save Gemini API key');
+      toast.error(err.message || 'Failed to save OpenAI API key');
     } finally {
       setSavingKey(false);
     }
@@ -265,16 +268,16 @@ export function SettingsModule({
   const performDiagnostic = async () => {
     setTesting(true);
     try {
-      const response = await fetch('/api/gemini-diagnostic');
+      const response = await fetch('/api/openai-diagnostic');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
       setDiagnostic(data);
       if (data.success) {
-        toast.success("Gemini Key verification test succeeded!");
+        toast.success("OpenAI Key verification test succeeded!");
       } else {
-        toast.error(`Gemini Key Test Failed: ${data.status}`);
+        toast.error(`OpenAI Key Test Failed: ${data.status}`);
       }
     } catch (err: any) {
       toast.error(`Could not complete Diagnostic check: ${err.message || err}`);
@@ -300,17 +303,12 @@ export function SettingsModule({
   const [validatingFolder, setValidatingFolder] = useState(false);
   const [gdriveLoading, setGdriveLoading] = useState(true);
 
-  // NVIDIA API State
-  const [nvidiaData, setNvidiaData] = useState<any>({ connected: false });
-  const [nvidiaLoading, setNvidiaLoading] = useState(true);
-  const [savingNvidia, setSavingNvidia] = useState(false);
-  const [nvidiaKeyInput, setNvidiaKeyInput] = useState('');
 
-  // Groq API State
-  const [groqData, setGroqData] = useState<any>({ connected: false });
-  const [groqLoading, setGroqLoading] = useState(true);
-  const [savingGroq, setSavingGroq] = useState(false);
-  const [groqKeyInput, setGroqKeyInput] = useState('');
+  // OpenAI API State
+  const [openaiData, setOpenaiData] = useState<any>({ connected: false });
+  const [openaiLoading, setOpenaiLoading] = useState(true);
+  const [savingOpenai, setSavingOpenai] = useState(false);
+  const [openaiKeyInput, setOpenaiKeyInput] = useState('');
 
   const fetchGDriveStatus = async () => {
     try {
@@ -333,92 +331,51 @@ export function SettingsModule({
     }
   };
 
-  const fetchNvidiaStatus = async () => {
+
+  const fetchOpenaiStatus = async () => {
     try {
-      const res = await fetch('/api/nvidia/status');
+      const res = await fetch('/api/openai/status');
       if (res.ok) {
         const data = await res.json();
-        setNvidiaData(data);
+        setOpenaiData(data);
       }
     } catch (err) {
-      console.error('Failed to load NVIDIA status:', err);
+      console.error('Failed to load OpenAI status:', err);
     } finally {
-      setNvidiaLoading(false);
+      setOpenaiLoading(false);
     }
   };
 
-  const handleSaveNvidiaKey = async () => {
-    if (!nvidiaKeyInput.trim()) {
-      toast.error('Please enter a valid NVIDIA API Key.');
+  const handleSaveOpenaiIntegrationKey = async () => {
+    if (!openaiKeyInput.trim()) {
+      toast.error('Please enter a valid OpenAI API Key.');
       return;
     }
-    setSavingNvidia(true);
+    setSavingOpenai(true);
     try {
-      const res = await fetch('/api/nvidia/save-key', {
+      const res = await fetch('/api/openai/save-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: nvidiaKeyInput })
+        body: JSON.stringify({ apiKey: openaiKeyInput })
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.message || 'NVIDIA API Key saved successfully.');
-        setNvidiaKeyInput('');
-        fetchNvidiaStatus();
+        toast.success(data.message || 'OpenAI API Key saved successfully.');
+        setOpenaiKeyInput('');
+        fetchOpenaiStatus();
       } else {
-        toast.error(data.error || 'Failed to save NVIDIA API Key.');
+        toast.error(data.error || 'Failed to save OpenAI API Key.');
       }
     } catch (err: any) {
-      toast.error(`Error saving NVIDIA config: ${err.message}`);
+      toast.error(`Error saving OpenAI config: ${err.message}`);
     } finally {
-      setSavingNvidia(false);
-    }
-  };
-
-  const fetchGroqStatus = async () => {
-    try {
-      const res = await fetch('/api/groq/status');
-      if (res.ok) {
-        const data = await res.json();
-        setGroqData(data);
-      }
-    } catch (err) {
-      console.error('Failed to load Groq status:', err);
-    } finally {
-      setGroqLoading(false);
-    }
-  };
-
-  const handleSaveGroqKey = async () => {
-    if (!groqKeyInput.trim()) {
-      toast.error('Please enter a valid Groq API Key.');
-      return;
-    }
-    setSavingGroq(true);
-    try {
-      const res = await fetch('/api/groq/save-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: groqKeyInput })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.message || 'Groq API Key saved successfully.');
-        setGroqKeyInput('');
-        fetchGroqStatus();
-      } else {
-        toast.error(data.error || 'Failed to save Groq API Key.');
-      }
-    } catch (err: any) {
-      toast.error(`Error saving Groq config: ${err.message}`);
-    } finally {
-      setSavingGroq(false);
+      setSavingOpenai(false);
     }
   };
 
   useEffect(() => {
     fetchGDriveStatus();
-    fetchNvidiaStatus();
-    fetchGroqStatus();
+    fetchOpenaiStatus();
 
     const handleAuthMessage = (event: MessageEvent) => {
       if (event.data?.type === 'GDRIVE_AUTH_SUCCESS') {
@@ -509,13 +466,34 @@ export function SettingsModule({
     if (!profile?.uid) return;
     setLoading(true);
     try {
-      await updateDoc(doc(db, 'users', profile.uid), {
-        ...formData,
-        updatedAt: new Date()
-      });
+      if (profile.employeeId) {
+        await updateDoc(doc(db, 'employees', profile.employeeId), {
+          fullName: formData.displayName,
+          department: formData.department,
+          updatedAt: new Date()
+        });
+      } else {
+        await setDoc(doc(db, 'users', profile.uid), {
+          displayName: formData.displayName,
+          department: formData.department,
+          updatedAt: new Date()
+        }, { merge: true });
+      }
+
+      if (auth.currentUser && auth.currentUser.displayName !== formData.displayName) {
+        await updateProfile(auth.currentUser, { displayName: formData.displayName }).catch(() => {});
+      }
+
+      if (onProfileUpdate) {
+        onProfileUpdate({
+          displayName: formData.displayName,
+          department: formData.department
+        });
+      }
+
       toast.success('Profile updated successfully');
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `users/${profile.uid}`);
+      handleFirestoreError(error, OperationType.UPDATE, profile.employeeId ? `employees/${profile.employeeId}` : `users/${profile.uid}`);
       toast.error('Failed to update profile');
     } finally {
       setLoading(false);
@@ -530,9 +508,9 @@ export function SettingsModule({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="space-y-4">
-           <Button variant="ghost" className="w-full justify-start gap-3 bg-brand-orange/10 text-brand-orange font-bold h-12 rounded-xl">
-              <User className="w-5 h-5" /> Profile Info
+        <div className="space-y-2">
+           <Button variant="ghost" className="w-full justify-start gap-3 bg-blue-50 text-blue-700 font-bold h-12 rounded-xl">
+              <User className="w-5 h-5 text-blue-600" /> Profile Info
            </Button>
            <Button variant="ghost" className="w-full justify-start gap-3 hover:bg-slate-100 text-slate-600 font-bold h-12 rounded-xl">
               <Bell className="w-5 h-5" /> Notifications
@@ -550,8 +528,8 @@ export function SettingsModule({
             <CardHeader className="border-b border-slate-50">
               <CardTitle className="text-lg font-bold">Personal Information</CardTitle>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+            <CardContent className="p-4 sm:p-6 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  <div className="space-y-2">
                     <Label>Full Name</Label>
                     <Input 
@@ -580,7 +558,7 @@ export function SettingsModule({
               <Button 
                 onClick={handleSave} 
                 disabled={loading}
-                className="bg-brand-blue font-bold px-8"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 rounded-xl shadow-md shadow-blue-500/20"
               >
                 {loading ? 'Saving...' : 'Save Changes'}
               </Button>
@@ -623,9 +601,9 @@ export function SettingsModule({
             <CardHeader className="border-b border-slate-100 bg-white">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-brand-orange animate-pulse" />
-                    Gemini API Diagnostics
+                  <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-900">
+                    <Activity className="w-5 h-5 text-blue-600 animate-pulse" />
+                    OpenAI API Diagnostics
                   </CardTitle>
                   <p className="text-xs text-slate-500 mt-0.5">Verify real-time connectivity, active model statuses, and credential pathways.</p>
                 </div>
@@ -633,7 +611,7 @@ export function SettingsModule({
                   onClick={performDiagnostic} 
                   disabled={testing}
                   size="sm"
-                  className="bg-brand-blue hover:bg-slate-800 text-white font-semibold rounded-xl text-xs flex items-center gap-1.5 px-3 h-8 shrink-0"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 px-4 h-9 shrink-0 shadow-xs"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${testing ? "animate-spin" : ""}`} />
                   {testing ? "Testing..." : "Verify Now"}
@@ -642,15 +620,15 @@ export function SettingsModule({
             </CardHeader>
 
             <CardContent className="p-6 space-y-6 bg-white">
-              {/* Gemini Pro API Key Input */}
+              {/* OpenAI API Key Input */}
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
                 <Label className="text-xs font-bold text-slate-700 block">
-                  Gemini API Key (Pro Subscription)
+                  OpenAI API Key
                 </Label>
                 <div className="flex gap-2">
                   <Input
                     type="password"
-                    placeholder="AIzaSy... (Paste your Gemini API Key here)"
+                    placeholder="sk-... (Paste your OpenAI API Key here)"
                     value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                     className="text-xs font-mono border-slate-200 bg-white rounded-xl flex-1"
@@ -658,14 +636,14 @@ export function SettingsModule({
                   <Button
                     size="sm"
                     disabled={savingKey}
-                    onClick={handleSaveGeminiKey}
-                    className="bg-brand-orange hover:bg-orange-600 text-white font-bold text-xs rounded-xl px-4 shrink-0"
+                    onClick={handleSaveOpenaiKey}
+                    className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl px-5 shrink-0"
                   >
                     {savingKey ? "Saving..." : "Save Key"}
                   </Button>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Paste your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 underline">Google AI Studio</a> to use your Gemini Pro subscription quota.
+                  Paste your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-blue-600 underline">OpenAI Platform</a> to use your account quota for transcription and generation.
                 </p>
               </div>
 
@@ -673,8 +651,8 @@ export function SettingsModule({
               {testing ? (
                 <div className="flex items-center justify-center p-6 bg-slate-50 rounded-xl border border-slate-100 animate-pulse">
                   <div className="flex flex-col items-center gap-2">
-                    <RefreshCw className="w-6 h-6 text-brand-blue animate-spin" />
-                    <p className="text-xs font-semibold text-slate-600 font-sans">Testing Gemini API endpoint status...</p>
+                    <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
+                    <p className="text-xs font-semibold text-slate-600 font-sans">Testing OpenAI API endpoint status...</p>
                   </div>
                 </div>
               ) : diagnostic ? (
@@ -767,7 +745,7 @@ export function SettingsModule({
             <Card className="shadow-sm border-slate-200 rounded-2xl overflow-hidden bg-white">
               <CardHeader className="border-b border-slate-50">
                 <CardTitle className="text-lg font-bold flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-brand-orange" />
+                  <Globe className="w-5 h-5 text-blue-600" />
                   Google Drive Cloud Integrations
                 </CardTitle>
                 <CardDescription>
@@ -810,7 +788,7 @@ export function SettingsModule({
                     ) : (
                       <Button 
                         id="btn-connect-gdrive"
-                        className="bg-brand-orange hover:bg-brand-dark-orange text-white text-xs font-bold"
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold px-5 h-10 shadow-sm shadow-blue-500/20"
                         onClick={handleConnectDrive}
                       >
                         Connect Google Drive
@@ -892,20 +870,21 @@ export function SettingsModule({
             </Card>
           )}
 
-          {/* NVIDIA API Integration */}
+
+          {/* OpenAI API Integration */}
           <Card className="shadow-md border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50 mb-6">
             <CardHeader className="border-b border-slate-100 bg-white">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <CardTitle className="text-lg font-bold flex items-center gap-2">
-                    <Cpu className="w-5 h-5 text-emerald-600" />
-                    NVIDIA API Integration
+                    <Sparkles className="w-5 h-5 text-blue-500" />
+                    OpenAI API Integration (ChatGPT)
                   </CardTitle>
-                  <p className="text-xs text-slate-500 mt-0.5">Configure NVIDIA NIM API for Audio Transcription and MOM Generation.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Configure OpenAI API for Audio Transcription and GPT-4o Minutes of Meeting Analysis.</p>
                 </div>
                 <div className="ml-auto">
-                  <span className={`px-3 py-1 text-xs font-bold rounded-full ${nvidiaData.connected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                    {nvidiaData.connected ? 'Active' : 'Not Configured'}
+                  <span className={`px-3 py-1 text-xs font-bold rounded-full ${openaiData.connected ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {openaiData.connected ? 'Active' : 'Not Configured'}
                   </span>
                 </div>
               </div>
@@ -914,17 +893,17 @@ export function SettingsModule({
               <div className="flex gap-3 max-w-xl">
                 <Input 
                   type="password"
-                  placeholder={nvidiaData.connected ? "•••••••••••••••• (Leave blank to keep current)" : "Enter NVIDIA API Key (nvapi-...)"}
-                  value={nvidiaKeyInput}
-                  onChange={e => setNvidiaKeyInput(e.target.value)}
+                  placeholder={openaiData.connected ? "•••••••••••••••• (Leave blank to keep current)" : "Enter OpenAI API Key (sk-...)"}
+                  value={openaiKeyInput}
+                  onChange={e => setOpenaiKeyInput(e.target.value)}
                   className="bg-white font-mono"
                 />
                 <Button 
-                  onClick={handleSaveNvidiaKey} 
-                  disabled={savingNvidia}
-                  className="bg-emerald-600 hover:bg-emerald-700 font-bold shrink-0 shadow-sm"
+                  onClick={handleSaveOpenaiIntegrationKey} 
+                  disabled={savingOpenai}
+                  className="bg-blue-600 hover:bg-blue-700 font-bold shrink-0 shadow-sm"
                 >
-                  {savingNvidia ? (
+                  {savingOpenai ? (
                     <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
                   ) : 'Save Key'}
                 </Button>
@@ -932,45 +911,6 @@ export function SettingsModule({
             </CardContent>
           </Card>
 
-          {/* Groq API Integration */}
-          <Card className="shadow-md border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50 mb-6">
-            <CardHeader className="border-b border-slate-100 bg-white">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-orange-500" />
-                    Groq API Integration
-                  </CardTitle>
-                  <p className="text-xs text-slate-500 mt-0.5">Configure Groq API for lightning-fast Audio Transcription.</p>
-                </div>
-                <div className="ml-auto">
-                  <span className={`px-3 py-1 text-xs font-bold rounded-full ${groqData.connected ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
-                    {groqData.connected ? 'Active' : 'Not Configured'}
-                  </span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="flex gap-3 max-w-xl">
-                <Input 
-                  type="password"
-                  placeholder={groqData.connected ? "•••••••••••••••• (Leave blank to keep current)" : "Enter Groq API Key (gsk_...)"}
-                  value={groqKeyInput}
-                  onChange={e => setGroqKeyInput(e.target.value)}
-                  className="bg-white font-mono"
-                />
-                <Button 
-                  onClick={handleSaveGroqKey} 
-                  disabled={savingGroq}
-                  className="bg-orange-600 hover:bg-orange-700 font-bold shrink-0 shadow-sm"
-                >
-                  {savingGroq ? (
-                    <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
-                  ) : 'Save Key'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Stakeholder Form Options */}
           <StakeholderOptionsEditor />

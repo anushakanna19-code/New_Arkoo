@@ -94,6 +94,7 @@ export function TaskModule({ profile }: { profile: any }) {
   const [filterEmployees, setFilterEmployees] = useState<string[]>([]);
   const [filterDueHorizon, setFilterDueHorizon] = useState<string>('all'); // 'all', 'today', 'week', 'month'
   const [filterRole, setFilterRole] = useState<string>('all'); // 'all', 'created-by-me', 'assigned-by-me', 'assigned-to-me'
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Selected task detail popup state
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
@@ -603,9 +604,9 @@ export function TaskModule({ profile }: { profile: any }) {
             <Button
               variant="outline"
               onClick={() => setShowNotifications(!showNotifications)}
-              className={`h-10 px-3.5 rounded-xl border-slate-200 transition-all cursor-pointer relative ${unreadCount > 0 ? 'bg-orange-50/50 border-orange-200' : ''}`}
+              className={`h-10 px-3.5 rounded-xl border-slate-200 transition-all cursor-pointer relative ${unreadCount > 0 ? 'bg-blue-50/50 border-blue-200' : ''}`}
             >
-              <Bell className={`w-4.5 h-4.5 text-slate-700 ${unreadCount > 0 ? 'text-brand-orange animate-wiggle' : ''}`} />
+              <Bell className={`w-4.5 h-4.5 text-slate-700 ${unreadCount > 0 ? 'text-blue-600 animate-wiggle' : ''}`} />
               {unreadCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-md animate-pulse">
                   {unreadCount}
@@ -615,12 +616,12 @@ export function TaskModule({ profile }: { profile: any }) {
 
             {/* Notifications Panel Box */}
             {showNotifications && (
-              <div id="notifications-box" className="absolute right-0 mt-2.5 w-80 lg:w-96 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-4 space-y-4">
+              <div id="notifications-box" className="absolute right-0 mt-2.5 w-[calc(100vw-2rem)] sm:w-80 lg:w-96 max-w-sm bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-4 space-y-4">
                 <div className="flex items-center justify-between border-b pb-2">
                   <span className="text-xs font-bold text-slate-800">Your Task Alerts ({notifications.length})</span>
                   <div className="flex gap-1.5">
                     {unreadCount > 0 && (
-                      <Button variant="ghost" onClick={markAllNotificationsAsRead} className="h-6 text-[10px] text-brand-orange hover:bg-orange-50 font-black px-1.5 rounded">
+                      <Button variant="ghost" onClick={markAllNotificationsAsRead} className="h-6 text-[10px] text-blue-600 hover:bg-blue-50 font-black px-1.5 rounded">
                         Read All
                       </Button>
                     )}
@@ -646,7 +647,7 @@ export function TaskModule({ profile }: { profile: any }) {
                         key={n.id}
                         className={`p-3 rounded-xl border text-[11px] leading-relaxed transition-all ${n.read
                             ? 'bg-slate-50/50 border-slate-100/80 text-slate-500'
-                            : 'bg-orange-50/40 border-orange-100 text-slate-800 font-semibold'
+                            : 'bg-blue-50/40 border-blue-100 text-slate-800 font-semibold'
                           }`}
                       >
                         <div className="flex justify-between items-start gap-1">
@@ -666,10 +667,10 @@ export function TaskModule({ profile }: { profile: any }) {
 
           {String(profile?.role || '').toLowerCase() !== 'vendor' && String(profile?.role || '').toLowerCase() !== 'supplier' && (
             <Dialog open={openAdd} onOpenChange={setOpenAdd}>
-              <DialogTrigger render={<Button className="bg-brand-orange hover:bg-orange-600 font-extrabold h-10 rounded-xl text-xs px-5 shadow-sm hover:shadow-md transition-all cursor-pointer text-white">
-                <Plus className="w-4.5 h-4.5 mr-2" /> CREATE TASK
+              <DialogTrigger render={<Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-11 rounded-xl text-xs sm:text-sm px-5 shadow-md shadow-blue-500/20 transition-all cursor-pointer inline-flex items-center">
+                <Plus className="w-4 h-4 mr-2" /> Create Task
               </Button>} />
-              <DialogContent className="max-w-md rounded-xl bg-white">
+              <DialogContent className="w-[95vw] max-w-lg rounded-2xl bg-white max-h-[90vh] overflow-y-auto p-5 sm:p-6">
                 <DialogHeader>
                   <DialogTitle className="text-lg font-extrabold text-slate-900">Add Live Task</DialogTitle>
                   <DialogDescription className="text-xs text-slate-500">
@@ -684,73 +685,96 @@ export function TaskModule({ profile }: { profile: any }) {
       </div>
 
       {/* Dynamic Filter Bento Overview Counts Box */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-3.5">
         <div
           onClick={handleClearFilters}
-          className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs hover:border-slate-300 transition-all cursor-pointer space-y-1 group"
+          className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs hover:border-slate-300 transition-all cursor-pointer space-y-1 group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">All Deliverables</span>
+            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">All Tasks</span>
             <ClipboardList className="w-4 h-4 text-slate-400 group-hover:text-amber-500 transition-colors" />
           </div>
-          <p className="text-2xl font-black text-slate-900">{counts.all}</p>
-          <p className="text-[10px] text-brand-orange font-bold group-hover:underline">Clear filter logs</p>
+          <p className="text-xl sm:text-2xl font-black text-slate-900">{counts.all}</p>
+          <p className="text-[10px] text-blue-600 font-bold group-hover:underline">Clear filter</p>
         </div>
 
         <div
           onClick={() => { setFilterStatuses(['pending']); }}
-          className={`p-4 rounded-xl border shadow-xs transition-all cursor-pointer space-y-1 ${filterStatuses.includes('pending') ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+          className={`p-3.5 sm:p-4 rounded-xl border shadow-xs transition-all cursor-pointer space-y-1 ${filterStatuses.includes('pending') ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-black text-amber-500 tracking-wider">Pending Tasks</span>
+            <span className="text-[10px] uppercase font-black text-amber-500 tracking-wider">Pending</span>
             <Clock className="w-4 h-4 text-amber-500" />
           </div>
-          <p className="text-2xl font-black text-slate-900">{counts.pending}</p>
-          <p className="text-[10px] text-slate-400 font-medium">Ready to initialize</p>
+          <p className="text-xl sm:text-2xl font-black text-slate-900">{counts.pending}</p>
+          <p className="text-[10px] text-slate-400 font-medium">Ready to init</p>
         </div>
 
         <div
           onClick={() => { setFilterStatuses(['in-progress']); }}
-          className={`p-4 rounded-xl border shadow-xs transition-all cursor-pointer space-y-1 ${filterStatuses.includes('in-progress') || filterStatuses.includes('in Progress') ? 'bg-sky-50 border-sky-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+          className={`p-3.5 sm:p-4 rounded-xl border shadow-xs transition-all cursor-pointer space-y-1 ${filterStatuses.includes('in-progress') || filterStatuses.includes('in Progress') ? 'bg-sky-50 border-sky-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-black text-sky-500 tracking-wider">Under Way</span>
+            <span className="text-[10px] uppercase font-black text-sky-500 tracking-wider">Active</span>
             <Activity className="w-4 h-4 text-sky-500 animate-pulse" />
           </div>
-          <p className="text-2xl font-black text-slate-900">{counts.inProgress}</p>
-          <p className="text-[10px] text-slate-400 font-medium">Active work streams</p>
+          <p className="text-xl sm:text-2xl font-black text-slate-900">{counts.inProgress}</p>
+          <p className="text-[10px] text-slate-400 font-medium">In progress</p>
         </div>
 
         <div
           onClick={() => { setFilterStatuses(['completed']); }}
-          className={`p-4 rounded-xl border shadow-xs transition-all cursor-pointer space-y-1 ${filterStatuses.includes('completed') ? 'bg-green-50 border-green-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+          className={`p-3.5 sm:p-4 rounded-xl border shadow-xs transition-all cursor-pointer space-y-1 ${filterStatuses.includes('completed') ? 'bg-green-50 border-green-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-black text-green-500 tracking-wider">Fully Completed</span>
+            <span className="text-[10px] uppercase font-black text-green-500 tracking-wider">Completed</span>
             <CheckCircle2 className="w-4 h-4 text-green-500" />
           </div>
-          <p className="text-2xl font-black text-slate-900">{counts.completed}</p>
-          <p className="text-[10px] text-slate-400 font-medium">Archived solutions</p>
+          <p className="text-xl sm:text-2xl font-black text-slate-900">{counts.completed}</p>
+          <p className="text-[10px] text-slate-400 font-medium">Done</p>
         </div>
 
         <div
           onClick={() => { setFilterStatuses(['overdue']); }}
-          className={`p-4 rounded-xl border shadow-xs transition-all cursor-pointer space-y-1 col-span-2 md:col-span-1 ${filterStatuses.includes('overdue') ? 'bg-red-50 border-red-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+          className={`p-3.5 sm:p-4 rounded-xl border shadow-xs transition-all cursor-pointer space-y-1 col-span-2 sm:col-span-1 ${filterStatuses.includes('overdue') ? 'bg-red-50 border-red-300' : 'bg-white border-slate-200 hover:border-slate-300'}`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-black text-red-600 tracking-wider">Overdue Alerts</span>
+            <span className="text-[10px] uppercase font-black text-red-600 tracking-wider">Overdue</span>
             <AlertCircle className="w-4 h-4 text-red-600 animate-bounce" />
           </div>
-          <p className="text-2xl font-black text-red-600">{counts.overdue}</p>
-          <p className="text-[10px] text-red-500 font-bold">Requires support</p>
+          <p className="text-xl sm:text-2xl font-black text-red-600">{counts.overdue}</p>
+          <p className="text-[10px] text-red-500 font-bold">Needs attention</p>
         </div>
       </div>
 
-      {/* Main Terminal View Grid split into Sidebar (Filters) and List (Tasks) */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      {/* Mobile Filter Toggle Button (< lg) */}
+      <div className="lg:hidden">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
+          className="w-full flex items-center justify-between h-11 px-4 bg-white border-slate-200 rounded-xl font-bold text-xs text-slate-700 shadow-xs hover:bg-slate-50 cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-slate-600" />
+            <span>Filter Tasks by Status, Priority & Dept</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {(filterStatuses.length + filterPriorities.length + filterDepartments.length + filterEmployees.length + (filterDueHorizon !== 'all' ? 1 : 0) + (filterRole !== 'all' ? 1 : 0)) > 0 && (
+              <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-extrabold rounded-full">
+                {filterStatuses.length + filterPriorities.length + filterDepartments.length + filterEmployees.length + (filterDueHorizon !== 'all' ? 1 : 0) + (filterRole !== 'all' ? 1 : 0)} Active
+              </span>
+            )}
+            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${mobileFiltersOpen ? 'rotate-180' : ''}`} />
+          </div>
+        </Button>
+      </div>
 
-        {/* Left Side Advanced Filtering Panel (Aesthetic Sidebar) */}
-        <div className="w-full lg:w-72 shrink-0 space-y-5 bg-white p-5 rounded-2xl border border-slate-200 h-fit shadow-xs">
+      {/* Main Terminal View Grid split into Sidebar (Filters) and List (Tasks) */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+
+        {/* Advanced Filtering Panel (Collapsible on Mobile, Persistent on Desktop) */}
+        <div className={`${mobileFiltersOpen ? 'block' : 'hidden'} lg:block w-full lg:w-64 xl:w-72 shrink-0 space-y-5 bg-white p-5 rounded-2xl border border-slate-200 h-fit shadow-xs`}>
           <div className="flex items-center justify-between border-b pb-3.5">
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-slate-700" />
@@ -836,7 +860,7 @@ export function TaskModule({ profile }: { profile: any }) {
                     <div
                       key={item.id}
                       onClick={() => setSelectedDueHorizon(item.id)}
-                      className={`flex items-center justify-between p-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${active ? 'bg-orange-50 border border-orange-200 text-brand-orange' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}
+                      className={`flex items-center justify-between p-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${active ? 'bg-blue-50 border border-blue-200 text-blue-600' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}
                     >
                       <span>{item.label}</span>
                       <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{item.count}</span>
@@ -909,7 +933,7 @@ export function TaskModule({ profile }: { profile: any }) {
                     <div
                       key={item.id}
                       onClick={() => setSelectedRoleFilter(item.id)}
-                      className={`flex items-center justify-between p-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${active ? 'bg-orange-50 border border-orange-200 text-brand-orange' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}
+                      className={`flex items-center justify-between p-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${active ? 'bg-blue-50 border border-blue-200 text-blue-600' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}
                     >
                       <span>{item.label}</span>
                       <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{item.count}</span>
@@ -923,29 +947,29 @@ export function TaskModule({ profile }: { profile: any }) {
         </div>
 
         {/* Right Side Task Feed */}
-        <div className="flex-1 space-y-4">
+        <div className="flex-1 min-w-0 w-full space-y-4">
 
-          <div className="flex flex-col md:flex-row gap-4 items-center">
+          <div className="flex flex-col sm:flex-row gap-3 items-center">
             <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
                 placeholder="Search by keywords, assignees, titles, descriptions..."
-                className="pl-10 h-11 bg-white border-slate-200 rounded-xl"
+                className="pl-10 h-11 bg-white border-slate-200 rounded-xl text-sm"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
 
-            <div className="w-full sm:w-48 shrink-0">
+            <div className="w-full sm:w-56 shrink-0">
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="h-11 bg-white border-slate-200 rounded-xl">
+                <SelectTrigger className="h-11 bg-white border-slate-200 rounded-xl text-xs font-semibold px-3 w-full">
                   <SelectValue placeholder="Sort order" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="created-desc">Created (Newest)</SelectItem>
-                  <SelectItem value="created-asc">Created (Oldest)</SelectItem>
-                  <SelectItem value="due-asc">Deadline (Early First)</SelectItem>
-                  <SelectItem value="due-desc">Deadline (Late First)</SelectItem>
+                  <SelectItem value="created-desc" className="text-xs font-medium">🕒 Created (Newest)</SelectItem>
+                  <SelectItem value="created-asc" className="text-xs font-medium">🕒 Created (Oldest)</SelectItem>
+                  <SelectItem value="due-asc" className="text-xs font-medium">📅 Deadline (Earliest)</SelectItem>
+                  <SelectItem value="due-desc" className="text-xs font-medium">📅 Deadline (Latest)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1018,7 +1042,7 @@ export function TaskModule({ profile }: { profile: any }) {
                     {/* Left click-container for opening full details drawer */}
                     <div
                       onClick={() => { setSelectedTask(task); setActiveDetailTab('notes'); }}
-                      className="flex-1 p-6 space-y-3 cursor-pointer hover:bg-slate-50/50 transition-colors"
+                      className="flex-1 p-6 space-y-3 cursor-pointer hover:bg-slate-50/50 transition-colors min-w-0"
                     >
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className={`
@@ -1041,10 +1065,10 @@ export function TaskModule({ profile }: { profile: any }) {
                       </div>
 
                       <div className="flex items-start justify-between">
-                        <h3 className="text-base font-extrabold text-slate-900 group-hover:text-brand-orange transition-colors">
+                        <h3 className="text-base font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
                           {task.title}
                         </h3>
-                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-orange group-hover:translate-x-1 transition-all" />
+                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all shrink-0" />
                       </div>
 
                       <p className="text-slate-500 text-xs leading-relaxed line-clamp-2 pr-4 font-normal">
@@ -1052,16 +1076,16 @@ export function TaskModule({ profile }: { profile: any }) {
                       </p>
 
                       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-2 border-t border-slate-100 text-slate-500">
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-slate-400" />
-                          <span className="text-xs font-bold text-slate-700">{task.assigneeName || 'Unassigned'}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <User className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="text-xs font-bold text-slate-700 truncate">{task.assigneeName || 'Unassigned'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="text-xs font-bold text-slate-700 truncate">{task.department || 'General'}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-slate-400" />
-                          <span className="text-xs font-bold text-slate-700">{task.department || 'General'}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-slate-400" />
+                          <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
                           <span className="text-xs font-bold text-slate-700">Due: {formatDeadlineDisplay(task.deadline)}</span>
                         </div>
                         <div className="flex items-center gap-2 ml-auto">
@@ -1074,10 +1098,10 @@ export function TaskModule({ profile }: { profile: any }) {
                     </div>
 
                     {/* Operational direct buttons */}
-                    <div className="flex flex-col sm:flex-row md:flex-col items-center justify-center gap-2 p-4 md:p-5 border-t md:border-t-0 md:border-l border-slate-100 bg-slate-50/10 shrink-0 md:w-40 w-full">
+                    <div className="flex flex-col sm:flex-row md:flex-col items-center justify-center gap-2.5 p-4 md:p-5 border-t md:border-t-0 md:border-l border-slate-100 bg-slate-50/20 shrink-0 md:w-48 lg:w-52 w-full">
                       <DropdownMenu>
-                        <DropdownMenuTrigger render={<Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs h-9 rounded-xl transition-colors cursor-pointer justify-center">
-                          STATUS <ChevronDown className="w-3.5 h-3.5 ml-1.5" />
+                        <DropdownMenuTrigger render={<Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs h-9 rounded-xl transition-colors cursor-pointer justify-center shadow-xs">
+                          Status <ChevronDown className="w-3.5 h-3.5 ml-1.5" />
                         </Button>} />
                         <DropdownMenuContent align="end" className="w-44 p-1 rounded-xl shadow-xl z-30">
                           <DropdownMenuItem onClick={() => updateStatus(task.id, 'pending')} className="rounded-lg font-bold text-xs p-2 cursor-pointer">Pending</DropdownMenuItem>
@@ -1094,26 +1118,27 @@ export function TaskModule({ profile }: { profile: any }) {
                           setSelectedTask(task);
                           setActiveDetailTab('notes');
                         }}
-                        className="w-full bg-white hover:bg-orange-50 text-slate-700 hover:text-brand-orange border border-slate-200 hover:border-orange-200 font-extrabold text-xs h-9 rounded-xl transition-all cursor-pointer justify-center gap-1.5 shadow-xs"
+                        className="w-full bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 border border-slate-200 hover:border-blue-200 font-bold text-xs h-9 rounded-xl transition-all cursor-pointer justify-center gap-1.5 shadow-xs"
                       >
-                        <MessageSquare className="w-4 h-4 text-slate-400" /> NOTES
+                        <MessageSquare className="w-3.5 h-3.5 text-slate-400" /> Notes
                       </Button>
 
-                      <div className="flex gap-2 w-full justify-between items-center">
+                      <div className="flex gap-2 w-full items-center">
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           onClick={(e) => { e.stopPropagation(); setEditingTask(task); }}
-                          className={`h-8 text-[10px] font-bold text-slate-600 hover:text-sky-600 hover:bg-sky-50 rounded-lg border border-slate-200/80 ${canDeleteTask ? 'flex-1' : 'w-full'}`}
+                          className={`h-9 text-xs font-bold text-slate-700 hover:text-blue-600 hover:bg-blue-50 hover:border-blue-200 rounded-xl border border-slate-200 transition-all ${canDeleteTask ? 'flex-1' : 'w-full'} justify-center`}
                         >
-                          <Edit3 className="w-3 h-3 mr-1" /> Edit
+                          <Edit3 className="w-3.5 h-3.5 mr-1" /> Edit
                         </Button>
                         {canDeleteTask && (
                           <Button
                             variant="destructive"
                             onClick={(e) => { e.stopPropagation(); setTaskToDelete(task); }}
-                            className="h-8 flex-1 text-[10px] font-black bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all"
+                            className="h-9 px-3 text-xs font-bold bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 rounded-xl transition-all justify-center"
+                            title="Delete Task"
                           >
-                            <Trash2 className="w-3 h-3 mr-1" /> Delete
+                            <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
                           </Button>
                         )}
                       </div>
@@ -1183,7 +1208,7 @@ export function TaskModule({ profile }: { profile: any }) {
                 <div className="space-y-1.5">
                   <span className="text-[10px] uppercase font-black text-slate-400 tracking-widest block pl-0.5">Assigned To</span>
                   <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 shadow-xs">
-                    <div className="w-10 h-10 rounded-full bg-brand-orange/10 flex items-center justify-center font-black text-brand-orange text-sm shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center font-black text-blue-600 text-sm shrink-0 border border-blue-100">
                       {String(selectedTask.assigneeName || '?').charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -1594,7 +1619,7 @@ function TaskForm({ task, profile, employees, onSuccess }: { task?: any; profile
       </div>
       <DialogFooter className="pt-4 border-t gap-2 md:gap-0">
         <Button type="button" variant="ghost" onClick={onSuccess} className="rounded-xl h-10 font-bold text-xs">Cancel</Button>
-        <Button type="submit" disabled={loading} className="bg-brand-orange hover:bg-orange-600 font-extrabold px-8 text-white h-10 rounded-xl">
+        <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 font-bold px-8 text-white h-10 rounded-xl shadow-md shadow-blue-500/20">
           {loading ? 'indexing...' : (task?.id ? 'Save Changes' : 'Create Task')}
         </Button>
       </DialogFooter>
@@ -1705,8 +1730,8 @@ function NotesSubSection({ taskId, profile, onLogActivity }: { taskId: string; p
           onKeyDown={e => { if (e.key === 'Enter') handlePostNote(); }}
           className="rounded-xl h-11 border-slate-200 text-xs flex-1 bg-slate-50/50 focus:bg-white transition-all w-full"
         />
-        <Button onClick={handlePostNote} disabled={loading} className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs h-11 rounded-xl px-5">
-          {loading ? 'Posting...' : 'PUBLISH'}
+        <Button onClick={handlePostNote} disabled={loading} className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs h-11 rounded-xl px-5">
+          {loading ? 'Posting...' : 'Publish Note'}
         </Button>
       </div>
 
@@ -2037,15 +2062,15 @@ function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: string; p
                 ))}
               </div>
 
-              <Button onClick={handleStopRecord} className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs h-9 rounded-xl px-6 cursor-pointer">
-                <Square className="w-3.5 h-3.5 mr-2" /> STOP AND TRANSCRIBE
+              <Button onClick={handleStopRecord} className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs h-9 rounded-xl px-6 cursor-pointer">
+                <Square className="w-3.5 h-3.5 mr-2" /> Stop & Transcribe
               </Button>
             </div>
           ) : isProcessing ? (
             <div className="flex flex-col items-center space-y-2 py-3 text-center">
-              <Loader2 className="w-10 h-10 text-brand-orange animate-spin mb-1" />
-              <p className="text-xs font-black text-slate-700">Analyzing voice waveforms...</p>
-              <p className="text-[10px] text-slate-400 font-bold max-w-sm leading-relaxed">
+              <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-1" />
+              <p className="text-xs font-bold text-slate-700">Analyzing voice waveforms...</p>
+              <p className="text-[10px] text-slate-400 font-medium max-w-sm leading-relaxed">
                 Gemini is transcribing spoken words. Hold on, indexing audio in Firestore...
               </p>
             </div>
@@ -2053,16 +2078,16 @@ function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: string; p
             <div className="w-full flex flex-col sm:flex-row items-center justify-center gap-3 py-3">
               <Button
                 onClick={handleStartRecord}
-                className="bg-brand-orange hover:bg-orange-600 text-white font-black h-11 px-5 rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-2 w-full sm:w-auto justify-center"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-11 px-5 rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center gap-2 w-full sm:w-auto justify-center"
               >
-                <Mic className="w-4 h-4" /> RECORD VOICE
+                <Mic className="w-4 h-4" /> Record Voice
               </Button>
               <Button
                 onClick={handleUploadAudioClick}
                 variant="outline"
                 className="bg-white hover:bg-slate-50 text-slate-700 border-slate-200 font-bold h-11 px-5 rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-2 w-full sm:w-auto justify-center"
               >
-                <Upload className="w-4 h-4" /> UPLOAD AUDIO
+                <Upload className="w-4 h-4" /> Upload Audio
               </Button>
             </div>
           )}
@@ -2081,7 +2106,7 @@ function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: string; p
             <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-200 relative group/memo shadow-xs">
               <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 mb-2 gap-2 border-b border-slate-50 pb-1.5">
                 <span className="text-slate-800 font-extrabold flex items-center gap-1.5">
-                  <UserCheck className="w-3.5 h-3.5 text-brand-orange" /> {item.userName}
+                  <UserCheck className="w-3.5 h-3.5 text-blue-600" /> {item.userName}
                 </span>
                 <span className="text-slate-400 font-semibold">
                   {item.createdAt?.toDate ? format(item.createdAt.toDate(), 'PP p') : 'Just now'}
@@ -2094,8 +2119,8 @@ function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: string; p
               </div>
 
               {/* Transcript block */}
-              <div className="mt-3 bg-orange-50/30 p-3 rounded-xl border border-orange-100/40">
-                <span className="text-[9px] uppercase font-black text-brand-orange tracking-wider block mb-1">
+              <div className="mt-3 bg-blue-50/40 p-3 rounded-xl border border-blue-100/60">
+                <span className="text-[9px] uppercase font-black text-blue-600 tracking-wider block mb-1">
                   AI Transcribed Transcription Notes
                 </span>
                 <p className="text-xs text-slate-700 font-semibold leading-relaxed break-words">
@@ -2153,7 +2178,7 @@ function TimelineSubSection({ taskId }: { taskId: string }) {
           activities.map((item, idx) => (
             <div key={item.id || idx} className="relative group text-left pb-1">
               {/* Timeline marker */}
-              <span className="absolute -left-[20px] top-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-slate-300 ring-4 ring-white group-hover:bg-brand-orange transition-all duration-300" />
+              <span className="absolute -left-[20px] top-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-slate-300 ring-4 ring-white group-hover:bg-blue-600 transition-all duration-300" />
 
               <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-slate-400">
                 <span className="font-extrabold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-wider">

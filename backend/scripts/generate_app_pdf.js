@@ -119,7 +119,7 @@ function createDocumentationPDF() {
     "• Backend Server & Express Middleware (tsx server.ts)",
     "• Cloud Database: Google Firebase Firestore (Master Stakeholders, Meetings, Tasks, Settings, Audit Logs)",
     "• Security & Authentication: Google OAuth2 via Firebase Auth with zero self-registration (Admin pre-approval required)",
-    "• Integration Services: Persistent Google Drive Cloud Backup, Groq & NVIDIA AI Inference, Gmail SMTP Notifications"
+    "• Integration Services: Persistent Google Drive Cloud Backup, OpenAI AI Inference, Gmail SMTP Notifications"
   ];
 
   overviewText.forEach(line => {
@@ -167,7 +167,7 @@ function createDocumentationPDF() {
       color: colors.purpleHeader,
       desc: "Repository of processed audio meeting recordings, AI summaries, and automated action item extraction.",
       features: [
-        "Audio Transcripts: Full word-for-word text transcription generated via OpenAI Whisper & Gemini AI.",
+        "Audio Transcripts: Full word-for-word text transcription generated via OpenAI AI.",
         "Key Takeaways & Summaries: AI-generated executive summaries highlighting decisions made during meetings.",
         "Automated Action Items: AI automatically detects task commitments from spoken dialogue and prompts one-click task creation.",
         "Search & Filtering: Instant filter by meeting title, status (recording, processing, completed), or date range."
@@ -276,7 +276,7 @@ function createDocumentationPDF() {
       desc: "System-wide administrative configuration center for external integrations and AI providers.",
       features: [
         "Google Drive Integration: Connect persistent Google Drive OAuth credentials for cloud storage of meeting audio & task attachments.",
-        "AI Provider Configuration: Configure API keys and model parameters for Groq AI (Llama 3.3) and NVIDIA NIM endpoints.",
+        "AI Provider Configuration: Configure API keys and model parameters for OpenAI endpoints.",
         "Stakeholder Options: Add/remove custom stakeholder dropdown options and department tags.",
         "Notification Preferences: Configure SMTP email notification rules and system alerts."
       ]

@@ -1,2 +1,5 @@
 # Cloudflare Pages API Proxy Rule for Live Render Backend
 /api/* https://new-arkoo.onrender.com/api/:splat 200
+
+# SPA Fallback Routing
+/* /index.html 200

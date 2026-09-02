@@ -1,0 +1,14 @@
+node_modules
+.git
+.gitignore
+*.md
+dist
+backend/dist
+frontend/dist
+backend/uploads
+*.log
+.env
+backend/.env
+.vscode
+.idea
+.qodo

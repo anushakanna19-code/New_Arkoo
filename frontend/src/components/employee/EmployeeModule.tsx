@@ -26,7 +26,8 @@ import {
   Mail,
   Phone,
   X,
-  Check
+  Check,
+  ArrowUpDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,11 +54,13 @@ export function EmployeeModule({ profile }: { profile: any }) {
   const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<any | null>(null);
 
+  const [sortBy, setSortBy] = useState<string>('date-desc');
+
   const userRole = String(profile?.role || '').toLowerCase();
   const isAdminOrManager = userRole === 'admin' || userRole === 'manager';
 
   useEffect(() => {
-    const q = query(collection(db, 'employees'), orderBy('fullName', 'asc'));
+    const q = query(collection(db, 'employees'));
     const unsubscribe = onSnapshot(q, (snap) => {
       setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => {
@@ -192,49 +195,119 @@ export function EmployeeModule({ profile }: { profile: any }) {
     return name.slice(0, 2).toUpperCase();
   };
 
-  const filteredEmployees = employees.filter(e => 
+  const getEmployeeSortDate = (emp: any) => {
+    if (emp.createdAt) {
+      if (emp.createdAt.toDate) return emp.createdAt.toDate().getTime();
+      if (emp.createdAt.seconds) return emp.createdAt.seconds * 1000;
+      const d = new Date(emp.createdAt).getTime();
+      if (!isNaN(d)) return d;
+    }
+    if (emp.updatedAt) {
+      if (emp.updatedAt.toDate) return emp.updatedAt.toDate().getTime();
+      if (emp.updatedAt.seconds) return emp.updatedAt.seconds * 1000;
+      const d = new Date(emp.updatedAt).getTime();
+      if (!isNaN(d)) return d;
+    }
+    if (emp.joiningDate) {
+      const d = new Date(emp.joiningDate).getTime();
+      if (!isNaN(d)) return d;
+    }
+    return 0;
+  };
+
+  const getEmployeeJoiningDate = (emp: any) => {
+    if (emp.joiningDate) {
+      const d = new Date(emp.joiningDate).getTime();
+      if (!isNaN(d)) return d;
+    }
+    return getEmployeeSortDate(emp);
+  };
+
+  const sortedEmployees = [...employees].sort((a, b) => {
+    if (sortBy === 'date-desc') {
+      return getEmployeeSortDate(b) - getEmployeeSortDate(a);
+    }
+    if (sortBy === 'date-asc') {
+      return getEmployeeSortDate(a) - getEmployeeSortDate(b);
+    }
+    if (sortBy === 'joining-desc') {
+      return getEmployeeJoiningDate(b) - getEmployeeJoiningDate(a);
+    }
+    if (sortBy === 'joining-asc') {
+      return getEmployeeJoiningDate(a) - getEmployeeJoiningDate(b);
+    }
+    if (sortBy === 'name-asc') {
+      return (a.fullName || '').localeCompare(b.fullName || '');
+    }
+    if (sortBy === 'name-desc') {
+      return (b.fullName || '').localeCompare(a.fullName || '');
+    }
+    return 0;
+  });
+
+  const filteredEmployees = sortedEmployees.filter(e => 
     (e.fullName || '').toLowerCase().includes(search.toLowerCase()) || 
     (e.employeeId || '').toLowerCase().includes(search.toLowerCase()) ||
     (e.department || '').toLowerCase().includes(search.toLowerCase()) ||
     (e.designation || '').toLowerCase().includes(search.toLowerCase()) ||
-    (e.email || '').toLowerCase().includes(search.toLowerCase())
+    (e.email || '').toLowerCase().includes(search.toLowerCase()) ||
+    (e.stakeholderType || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <div className="space-y-6">
       {/* Header and Add Button Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 min-w-[320px] md:w-96">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 w-full lg:w-auto flex-wrap">
+          <div className="relative flex-1 w-full sm:w-72 lg:w-80">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input 
               placeholder="Search employees..." 
-              className="pl-10 h-11 bg-white border-slate-200 rounded-xl text-sm"
+              className="pl-10 h-11 bg-white border-slate-200 rounded-xl text-sm w-full"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <span className="text-sm text-slate-500 font-medium whitespace-nowrap">
-            {filteredEmployees.length} stakeholders
-          </span>
+
+          {/* Sort By Dropdown */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-white text-xs font-semibold px-3 w-full sm:w-[190px]">
+                <ArrowUpDown className="w-3.5 h-3.5 mr-1.5 text-slate-400 shrink-0" />
+                <SelectValue placeholder="Sort By" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date-desc" className="text-xs font-medium">🕒 Newest Added / Updated</SelectItem>
+                <SelectItem value="date-asc" className="text-xs font-medium">🕒 Oldest Added</SelectItem>
+                <SelectItem value="joining-desc" className="text-xs font-medium">📅 Joining Date (Newest)</SelectItem>
+                <SelectItem value="joining-asc" className="text-xs font-medium">📅 Joining Date (Oldest)</SelectItem>
+                <SelectItem value="name-asc" className="text-xs font-medium">🔤 Name (A → Z)</SelectItem>
+                <SelectItem value="name-desc" className="text-xs font-medium">🔤 Name (Z → A)</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <span className="text-xs sm:text-sm text-slate-500 font-bold whitespace-nowrap px-1 shrink-0">
+              {filteredEmployees.length} stakeholders
+            </span>
+          </div>
         </div>
 
         {isAdminOrManager && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
             <Button 
               onClick={handleSendLinkToAllStakeholders}
               variant="outline"
-              className="border-orange-200 text-orange-600 hover:bg-orange-50 font-bold h-11 rounded-xl text-sm px-4 bg-white shadow-sm"
+              className="w-full sm:w-auto border-blue-200 text-blue-600 hover:bg-blue-50 font-bold h-11 rounded-xl text-xs sm:text-sm px-4 bg-white shadow-xs justify-center"
             >
-              <Mail className="w-4 h-4 mr-2 text-orange-500" /> Send Link to All Stakeholders
+              <Mail className="w-4 h-4 mr-2 text-blue-600" /> Send Link to All
             </Button>
             <Dialog open={openAdd} onOpenChange={setOpenAdd}>
-              <DialogTrigger render={<Button className="bg-brand-orange hover:bg-orange-600 text-white font-bold h-11 rounded-xl text-sm px-6 shadow-md shadow-orange-500/20">
-                <Plus className="w-4 h-4 mr-2" /> Add Stakeholder
+              <DialogTrigger render={<Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold h-11 rounded-xl text-xs sm:text-sm px-5 shadow-md shadow-blue-500/20 justify-center">
+                <Plus className="w-4 h-4 mr-1.5" /> Add Stakeholder
               </Button>} />
-              <DialogContent className="sm:max-w-3xl md:max-w-3xl rounded-3xl p-8 bg-white max-h-[90vh] overflow-y-auto">
-                <DialogHeader className="pb-4">
-                  <DialogTitle className="text-2xl font-bold text-slate-900">Add Stakeholder</DialogTitle>
+              <DialogContent className="w-[95vw] sm:max-w-2xl rounded-3xl p-5 sm:p-7 bg-white max-h-[90vh] overflow-y-auto">
+                <DialogHeader className="pb-3 border-b border-slate-100">
+                  <DialogTitle className="text-xl font-bold text-slate-900">Add Stakeholder</DialogTitle>
                 </DialogHeader>
                 <EmployeeForm onSuccess={() => setOpenAdd(false)} />
               </DialogContent>
@@ -243,8 +316,139 @@ export function EmployeeModule({ profile }: { profile: any }) {
         )}
       </div>
 
-      {/* Employees Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      {/* Stakeholders Dual View: Cards on Mobile (< md), Table on Desktop (>= md) */}
+
+      {/* Mobile Card List (< md) */}
+      <div className="md:hidden space-y-3">
+        {filteredEmployees.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center text-slate-400">
+            <Users className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+            <p className="font-semibold text-sm">No stakeholders found.</p>
+          </div>
+        ) : (
+          filteredEmployees.map((emp) => {
+            const initials = getInitials(emp.fullName);
+            return (
+              <div
+                key={emp.id}
+                className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-3"
+              >
+                {/* Header: Avatar, Name, Role & Status */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0">
+                      {initials}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-900 text-sm leading-tight truncate">{emp.fullName}</h4>
+                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">{emp.employeeId || 'AR-000'} • {emp.designation || emp.role || 'Specialist'}</p>
+                    </div>
+                  </div>
+
+                  {/* Status Badge */}
+                  {emp.status === 'Active' || (emp.status === undefined && emp.isActive !== false) ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Active
+                    </span>
+                  ) : emp.status === 'Rejected' || emp.isActive === false ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Rejected
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200 shrink-0 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Pending
+                    </span>
+                  )}
+                </div>
+
+                {/* Department & Type Pills */}
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  <span className="px-2.5 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-md">
+                    {emp.department || 'Management'}
+                  </span>
+                  <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-[11px] font-semibold rounded-md">
+                    {emp.stakeholderType || 'Employee'}
+                  </span>
+                  {emp.location && (
+                    <span className="px-2.5 py-0.5 bg-slate-50 text-slate-500 text-[11px] font-medium rounded-md flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-slate-400" /> {emp.location}
+                    </span>
+                  )}
+                </div>
+
+                {/* Contact Links */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 text-xs text-slate-600">
+                  {emp.email && (
+                    <a href={`mailto:${emp.email}`} className="flex items-center gap-1.5 text-blue-600 hover:underline truncate">
+                      <Mail className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <span className="truncate">{emp.email}</span>
+                    </a>
+                  )}
+                  {(emp.mobile || emp.officialNumber) && (
+                    <a href={`tel:${emp.mobile || emp.officialNumber}`} className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900">
+                      <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{emp.mobile || emp.officialNumber}</span>
+                    </a>
+                  )}
+                </div>
+
+                {/* Actions Footer */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <div className="flex items-center gap-1.5">
+                    {isAdminOrManager && emp.status !== 'Active' && emp.status !== 'Accepted' && (
+                      <button 
+                        onClick={(e) => handleAcceptStakeholder(emp, e)}
+                        className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-emerald-200 shadow-xs"
+                      >
+                        <Check className="w-3.5 h-3.5" /> Accept
+                      </button>
+                    )}
+                    {isAdminOrManager && emp.status !== 'Rejected' && (
+                      <button 
+                        onClick={(e) => handleRejectStakeholder(emp.id, emp.fullName, e)}
+                        className="px-2.5 py-1 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-rose-200 shadow-xs"
+                      >
+                        <X className="w-3.5 h-3.5" /> Reject
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => setViewingEmployee(emp)}
+                      className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors"
+                      title="View Details"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    {isAdminOrManager && (
+                      <button 
+                        onClick={() => setEditingEmployee(emp)}
+                        className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors"
+                        title="Edit Stakeholder"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                    )}
+                    {isAdminOrManager && (
+                      <button
+                        onClick={(e) => deleteEmployee(emp.id, e)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Stakeholder"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Desktop Table (>= md) */}
+      <div className="hidden md:block bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50/70 border-b border-slate-200/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
@@ -421,9 +625,9 @@ export function EmployeeModule({ profile }: { profile: any }) {
       {/* Edit Employee Dialog */}
       {editingEmployee && (
         <Dialog open={true} onOpenChange={(open) => { if (!open) setEditingEmployee(null); }}>
-          <DialogContent className="sm:max-w-3xl md:max-w-3xl rounded-3xl p-8 bg-white max-h-[90vh] overflow-y-auto">
-            <DialogHeader className="pb-4">
-              <DialogTitle className="text-2xl font-bold text-slate-900">Edit Stakeholder</DialogTitle>
+          <DialogContent className="w-[95vw] sm:max-w-2xl rounded-3xl p-5 sm:p-7 bg-white max-h-[90vh] overflow-y-auto">
+            <DialogHeader className="pb-3 border-b border-slate-100">
+              <DialogTitle className="text-xl font-bold text-slate-900">Edit Stakeholder</DialogTitle>
             </DialogHeader>
             <EmployeeForm employee={editingEmployee} onSuccess={() => setEditingEmployee(null)} />
           </DialogContent>
@@ -654,28 +858,27 @@ function EmployeeForm({ employee, onSuccess }: { employee?: any; onSuccess: () =
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 text-sm pt-2">
+    <form onSubmit={handleSubmit} className="space-y-4 pt-2">
       {/* Full Name & Stakeholder Type */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Full Name *</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Full Name *</Label>
           <Input 
             required
             placeholder="e.g. Rahul Sharma"
             value={formData.fullName} 
             onChange={e => setFormData({...formData, fullName: e.target.value})} 
-            className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm"
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Stakeholder Type *</Label>
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Stakeholder Type *</Label>
           <Select value={formData.stakeholderType} onValueChange={val => setFormData({...formData, stakeholderType: val})}>
-            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm">
+            <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white text-[13px]">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
               {dropdownOpts.stakeholderTypes.map(t => (
-                <SelectItem key={t} value={t}>{t}</SelectItem>
+                <SelectItem key={t} value={t} className="text-[13px]">{t}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -683,53 +886,51 @@ function EmployeeForm({ employee, onSuccess }: { employee?: any; onSuccess: () =
       </div>
 
       {/* Employee ID & Date of Joining */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Stakeholder ID <span className="text-slate-400 font-normal">(auto if blank)</span></Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Stakeholder ID <span className="text-slate-400 font-normal">(auto if blank)</span></Label>
           <Input 
             placeholder="e.g. STK-1042"
             value={formData.employeeId} 
             onChange={e => setFormData({...formData, employeeId: e.target.value})} 
-            className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm"
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Date of Joining *</Label>
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Date of Joining *</Label>
           <Input 
             type="date"
             required
             value={formData.joiningDate} 
             onChange={e => setFormData({...formData, joiningDate: e.target.value})} 
-            className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm"
           />
         </div>
       </div>
 
       {/* Department & Designation */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Department *</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Department *</Label>
           <Select value={formData.department} onValueChange={val => setFormData({...formData, department: val})}>
-            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/50 text-sm">
+            <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white text-[13px]">
               <SelectValue placeholder="Select department" />
             </SelectTrigger>
             <SelectContent>
               {dropdownOpts.departments.map(d => (
-                <SelectItem key={d} value={d}>{d}</SelectItem>
+                <SelectItem key={d} value={d} className="text-[13px]">{d}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Designation *</Label>
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Designation *</Label>
           <Select value={formData.designation} onValueChange={val => setFormData({...formData, designation: val})}>
-            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/50 text-sm">
+            <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white text-[13px]">
               <SelectValue placeholder="Select designation" />
             </SelectTrigger>
             <SelectContent>
               {dropdownOpts.designations.map(d => (
-                <SelectItem key={d} value={d}>{d}</SelectItem>
+                <SelectItem key={d} value={d} className="text-[13px]">{d}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -737,30 +938,30 @@ function EmployeeForm({ employee, onSuccess }: { employee?: any; onSuccess: () =
       </div>
 
       {/* Gender & Location */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Gender</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Gender</Label>
           <Select value={formData.gender} onValueChange={val => setFormData({...formData, gender: val})}>
-            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/50 text-sm">
+            <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white text-[13px]">
               <SelectValue placeholder="Select gender" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Male">Male</SelectItem>
-              <SelectItem value="Female">Female</SelectItem>
-              <SelectItem value="Other">Other</SelectItem>
+              <SelectItem value="Male" className="text-[13px]">Male</SelectItem>
+              <SelectItem value="Female" className="text-[13px]">Female</SelectItem>
+              <SelectItem value="Other" className="text-[13px]">Other</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Location / Branch</Label>
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Location / Branch</Label>
           <Select value={formData.location} onValueChange={val => setFormData({...formData, location: val})}>
-            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/50 text-sm">
+            <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white text-[13px]">
               <SelectValue placeholder="Select location" />
             </SelectTrigger>
             <SelectContent>
               {dropdownOpts.locations.map(l => (
-                <SelectItem key={l} value={l}>{l}</SelectItem>
+                <SelectItem key={l} value={l} className="text-[13px]">{l}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -768,43 +969,41 @@ function EmployeeForm({ employee, onSuccess }: { employee?: any; onSuccess: () =
       </div>
 
       {/* Official Email & Personal Email */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Official Email ID *</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Official Email ID *</Label>
           <Input 
             type="email"
             required
             placeholder="rahul@company.com"
             value={formData.email} 
             onChange={e => setFormData({...formData, email: e.target.value})} 
-            className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm"
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Personal Email ID <span className="text-slate-400 font-normal">(optional)</span></Label>
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Personal Email ID <span className="text-slate-400 font-normal">(optional)</span></Label>
           <Input 
             type="email"
             placeholder="rahul.personal@gmail.com"
             value={formData.personalEmail} 
             onChange={e => setFormData({...formData, personalEmail: e.target.value})} 
-            className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm"
           />
         </div>
       </div>
 
       {/* Official Number & Personal Number */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Official Number *</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Official Number *</Label>
           <div className="flex gap-2">
             <Select value={formData.countryCodeOfficial} onValueChange={val => setFormData({...formData, countryCodeOfficial: val})}>
-              <SelectTrigger className="w-24 h-11 rounded-xl border-slate-200 bg-slate-50/50 text-xs shrink-0">
+              <SelectTrigger className="w-[90px] h-10 rounded-xl border-slate-200 bg-white text-[12px] shrink-0">
                 <SelectValue placeholder="IN +91" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="IN +91">IN +91</SelectItem>
-                <SelectItem value="US +1">US +1</SelectItem>
-                <SelectItem value="UK +44">UK +44</SelectItem>
+                <SelectItem value="IN +91" className="text-[12px]">IN +91</SelectItem>
+                <SelectItem value="US +1" className="text-[12px]">US +1</SelectItem>
+                <SelectItem value="UK +44" className="text-[12px]">UK +44</SelectItem>
               </SelectContent>
             </Select>
             <Input 
@@ -812,22 +1011,22 @@ function EmployeeForm({ employee, onSuccess }: { employee?: any; onSuccess: () =
               placeholder="98765 43210"
               value={formData.officialNumber} 
               onChange={e => setFormData({...formData, officialNumber: e.target.value})} 
-              className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm flex-1"
+              className="flex-1"
             />
           </div>
         </div>
 
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Personal Number *</Label>
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Personal Number *</Label>
           <div className="flex gap-2">
             <Select value={formData.countryCodePersonal} onValueChange={val => setFormData({...formData, countryCodePersonal: val})}>
-              <SelectTrigger className="w-24 h-11 rounded-xl border-slate-200 bg-slate-50/50 text-xs shrink-0">
+              <SelectTrigger className="w-[90px] h-10 rounded-xl border-slate-200 bg-white text-[12px] shrink-0">
                 <SelectValue placeholder="IN +91" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="IN +91">IN +91</SelectItem>
-                <SelectItem value="US +1">US +1</SelectItem>
-                <SelectItem value="UK +44">UK +44</SelectItem>
+                <SelectItem value="IN +91" className="text-[12px]">IN +91</SelectItem>
+                <SelectItem value="US +1" className="text-[12px]">US +1</SelectItem>
+                <SelectItem value="UK +44" className="text-[12px]">UK +44</SelectItem>
               </SelectContent>
             </Select>
             <Input 
@@ -835,95 +1034,87 @@ function EmployeeForm({ employee, onSuccess }: { employee?: any; onSuccess: () =
               placeholder="91234 56789"
               value={formData.personalNumber} 
               onChange={e => setFormData({...formData, personalNumber: e.target.value})} 
-              className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm flex-1"
+              className="flex-1"
             />
           </div>
         </div>
       </div>
 
       {/* Date of Birth & Blood Group */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Date of Birth</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Date of Birth</Label>
           <Input 
             type="date"
             value={formData.dateOfBirth} 
             onChange={e => setFormData({...formData, dateOfBirth: e.target.value})} 
-            className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm"
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Blood Group</Label>
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Blood Group</Label>
           <Select value={formData.bloodGroup} onValueChange={val => setFormData({...formData, bloodGroup: val})}>
-            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/50 text-sm">
+            <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white text-[13px]">
               <SelectValue placeholder="Select group" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="A+">A+</SelectItem>
-              <SelectItem value="A-">A-</SelectItem>
-              <SelectItem value="B+">B+</SelectItem>
-              <SelectItem value="B-">B-</SelectItem>
-              <SelectItem value="O+">O+</SelectItem>
-              <SelectItem value="O-">O-</SelectItem>
-              <SelectItem value="AB+">AB+</SelectItem>
-              <SelectItem value="AB-">AB-</SelectItem>
+              {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(bg => (
+                <SelectItem key={bg} value={bg} className="text-[13px]">{bg}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
       </div>
 
       {/* Emergency Contact & Address */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Emergency Contact</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Emergency Contact</Label>
           <Input 
             placeholder="Name - Number"
             value={formData.emergencyContact} 
             onChange={e => setFormData({...formData, emergencyContact: e.target.value})} 
-            className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm"
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-medium text-slate-500">Current Address</Label>
+        <div className="space-y-1.5">
+          <Label className="text-[12px] font-medium text-slate-600">Current Address</Label>
           <Input 
             placeholder="Full Address"
             value={formData.currentAddress} 
             onChange={e => setFormData({...formData, currentAddress: e.target.value})} 
-            className="h-11 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white text-sm"
           />
         </div>
       </div>
 
       {/* Reporting Manager */}
-      <div className="space-y-1">
-        <Label className="text-xs font-medium text-slate-500">Reporting Manager</Label>
+      <div className="space-y-1.5">
+        <Label className="text-[12px] font-medium text-slate-600">Reporting Manager</Label>
         <Select value={formData.reportingManager} onValueChange={val => setFormData({...formData, reportingManager: val})}>
-          <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/50 text-sm">
+          <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white text-[13px]">
             <SelectValue placeholder="— No manager —" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="No Manager">— No manager —</SelectItem>
-            <SelectItem value="Ajinkya Sanjay Vibhute">Ajinkya Sanjay Vibhute</SelectItem>
-            <SelectItem value="Deepak Gupta">Deepak Gupta</SelectItem>
-            <SelectItem value="Chetan Gajanan Nimje">Chetan Gajanan Nimje</SelectItem>
+            <SelectItem value="No Manager" className="text-[13px]">— No manager —</SelectItem>
+            <SelectItem value="Ajinkya Sanjay Vibhute" className="text-[13px]">Ajinkya Sanjay Vibhute</SelectItem>
+            <SelectItem value="Deepak Gupta" className="text-[13px]">Deepak Gupta</SelectItem>
+            <SelectItem value="Chetan Gajanan Nimje" className="text-[13px]">Chetan Gajanan Nimje</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* Footer Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
+      <div className="flex flex-col sm:flex-row justify-end gap-2.5 sm:gap-3 pt-4 mt-2 border-t border-slate-100">
         <Button 
           type="button" 
           variant="outline" 
           onClick={onSuccess}
-          className="h-11 rounded-xl border-slate-200 font-semibold text-slate-700"
+          className="h-11 rounded-xl text-xs font-bold w-full sm:w-auto px-6 cursor-pointer order-2 sm:order-1"
         >
           Cancel
         </Button>
         <Button 
           type="submit" 
           disabled={loading}
-          className="h-11 rounded-xl bg-brand-orange hover:bg-orange-600 text-white font-bold transition-all shadow-md shadow-orange-500/20 cursor-pointer"
+          className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-500/20 w-full sm:w-auto px-6 cursor-pointer order-1 sm:order-2"
         >
           {loading ? 'Saving...' : (employee ? 'Update Stakeholder' : 'Add Stakeholder')}
         </Button>
