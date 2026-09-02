@@ -714,20 +714,33 @@ export function MeetingModule({
           let driveFileId = '';
           let driveFileUrl = '';
 
-          // Fire-and-forget background cloud backup tasks so recording processing starts in under 5 seconds
-          (async () => {
-            try {
-              const fileExtension = blob.type.split('/')[1]?.split(';')[0] || 'webm';
-              const audioPath = `meetings/${meetingRefId}/audio_${Date.now()}.${fileExtension}`;
-              const storageRef = ref(storage, audioPath);
-              const uploadSnapshot = await uploadBytes(storageRef, blob);
-              const cloudUrl = await getDownloadURL(uploadSnapshot.ref);
+          // Upload audio to Firebase Storage for permanent cloud persistence
+          try {
+            const fileExtension = blob.type.split('/')[1]?.split(';')[0] || 'webm';
+            const audioPath = `meetings/${meetingRefId}/audio_${Date.now()}.${fileExtension}`;
+            const storageRef = ref(storage, audioPath);
+            
+            // Allow up to 4s for cloud upload before streaming AI analysis
+            const uploadPromise = uploadBytes(storageRef, blob).then(snap => getDownloadURL(snap.ref));
+            const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
+            
+            const cloudUrl = await Promise.race([uploadPromise, timeoutPromise]);
+            if (cloudUrl) {
+              audioUrl = cloudUrl;
               await updateDoc(doc(db, 'meetings', meetingRefId), { audioUrl: cloudUrl });
-              console.log('[Background Storage] Audio uploaded to Firebase Storage:', cloudUrl);
-            } catch (storageErr) {
-              // Backend Cloudinary CDN handles primary audio storage
+              console.log('[Storage] Audio uploaded to Firebase Storage:', cloudUrl);
+            } else {
+              // Finish in background if it takes longer than 4s
+              uploadPromise.then(async (bgCloudUrl) => {
+                if (bgCloudUrl) {
+                  await updateDoc(doc(db, 'meetings', meetingRefId), { audioUrl: bgCloudUrl });
+                  console.log('[Background Storage] Audio uploaded to Firebase Storage (deferred):', bgCloudUrl);
+                }
+              }).catch(() => {});
             }
-          })();
+          } catch (storageErr) {
+            console.warn('[Storage] Firebase Storage upload skipped:', storageErr);
+          }
 
           if (googleAccessToken && isBackupEnabled) {
             (async () => {
@@ -1717,18 +1730,28 @@ function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: string; 
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
+  const [checkingCache, setCheckingCache] = useState(true);
 
   // Check if locally cached audio exists in browser IndexedDB for this meeting
   useEffect(() => {
     let active = true;
     if (meetingId) {
+      setCheckingCache(true);
       getAudioFromLocalCache(meetingId).then((blob) => {
-        if (active && blob && blob.size > 0) {
-          const url = URL.createObjectURL(blob);
-          setLocalBlobUrl(url);
-          setIsLoaded(true);
+        if (active) {
+          if (blob && blob.size > 0) {
+            const url = URL.createObjectURL(blob);
+            setLocalBlobUrl(url);
+            setIsLoaded(true);
+            setHasError(false);
+          }
+          setCheckingCache(false);
         }
+      }).catch(() => {
+        if (active) setCheckingCache(false);
       });
+    } else {
+      setCheckingCache(false);
     }
     return () => {
       active = false;
@@ -1740,9 +1763,17 @@ function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: string; 
 
   const effectiveAudioUrl = useMemo(() => {
     if (localBlobUrl) return localBlobUrl;
+    if (checkingCache) return '';
     if (!audioUrl) return '';
     return getApiUrl(audioUrl);
-  }, [localBlobUrl, audioUrl]);
+  }, [localBlobUrl, checkingCache, audioUrl]);
+
+  useEffect(() => {
+    if (effectiveAudioUrl) {
+      setHasError(false);
+      setIsLoaded(false);
+    }
+  }, [effectiveAudioUrl]);
 
   const isDriveUrl = !localBlobUrl && (audioUrl?.includes('drive.google.com') || audioUrl?.includes('googleapis.com/drive'));
 
@@ -1951,9 +1982,14 @@ function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: string; 
           )}
 
           {hasError && (
-            <p className="text-[10px] text-rose-500 text-center font-medium">
-              Audio stream could not be loaded from server. Please check backend connection.
-            </p>
+            <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-center space-y-1 mt-2">
+              <p className="text-xs font-bold text-amber-800">
+                Recording audio unavailable for this earlier session
+              </p>
+              <p className="text-[11px] text-amber-700 leading-relaxed">
+                This meeting was recorded before cloud storage was activated. Start a new meeting recording to test high-definition audio playback and downloads.
+              </p>
+            </div>
           )}
         </div>
       )}
