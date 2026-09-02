@@ -16,12 +16,14 @@ router.post('/transcribe-chunk', async (req, res) => {
     return res.status(400).json({ error: 'Missing chunkBase64 audio data' });
   }
 
+  const safeMeetingId = (meetingId || 'temp').toString().replace(/[^a-zA-Z0-9_-]/g, '') || 'temp';
+  const safeChunkIndex = parseInt(chunkIndex, 10) || 0;
   const cleanMimeType = (mimeType || 'audio/webm').split(';')[0];
-  const rawExtension = cleanMimeType.split('/')[1] || 'webm';
+  const rawExtension = (cleanMimeType.split('/')[1] || 'webm').replace(/[^a-zA-Z0-9]/g, '');
 
-  const chunkRawFilename = `chunk_${meetingId}_${chunkIndex}_raw.${rawExtension}`;
+  const chunkRawFilename = `chunk_${safeMeetingId}_${safeChunkIndex}_raw.${rawExtension}`;
   const chunkRawPath = path.join(UPLOADS_DIR, chunkRawFilename);
-  const chunkWavFilename = `chunk_${meetingId}_${chunkIndex}_converted.wav`;
+  const chunkWavFilename = `chunk_${safeMeetingId}_${safeChunkIndex}_converted.wav`;
   const chunkWavPath = path.join(UPLOADS_DIR, chunkWavFilename);
 
   try {
@@ -82,12 +84,13 @@ router.post('/tasks/voice-note', async (req, res) => {
     return res.status(400).json({ error: 'Missing audioBase64 content' });
   }
 
+  const safeTaskId = (taskId || 'temp').toString().replace(/[^a-zA-Z0-9_-]/g, '') || 'temp';
   const cleanMimeType = (mimeType || 'audio/webm').split(';')[0];
-  const rawExtension = cleanMimeType.split('/')[1] || 'webm';
-  const filename = `task_${taskId}_voice_${Date.now()}_raw.${rawExtension}`;
+  const rawExtension = (cleanMimeType.split('/')[1] || 'webm').replace(/[^a-zA-Z0-9]/g, '');
+  const filename = `task_${safeTaskId}_voice_${Date.now()}_raw.${rawExtension}`;
   const rawPath = path.join(UPLOADS_DIR, filename);
 
-  const wavFilename = `task_${taskId}_voice_${Date.now()}_converted.wav`;
+  const wavFilename = `task_${safeTaskId}_voice_${Date.now()}_converted.wav`;
   const wavPath = path.join(UPLOADS_DIR, wavFilename);
 
   try {

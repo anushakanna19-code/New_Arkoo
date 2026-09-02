@@ -146,9 +146,10 @@ router.post('/process-meeting', async (req, res) => {
       return res.end();
     }
 
+    const safeMeetingId = (meetingId || 'temp').toString().replace(/[^a-zA-Z0-9_-]/g, '') || 'temp';
     let finalAudioBase64 = audioBase64 || '';
     let finalAudioMime = (mimeType || 'audio/webm').split(';')[0];
-    let finalAudioUrl = audioUrl || `/api/audio/${meetingId}`;
+    let finalAudioUrl = audioUrl || `/api/audio/${safeMeetingId}`;
 
     // Handle Google Drive file download
     if (driveFileUrl) {
@@ -163,9 +164,9 @@ router.post('/process-meeting', async (req, res) => {
       if (!metaRes.ok) throw new Error(`Drive metadata failed: ${await metaRes.text()}`);
 
       const metaData = await metaRes.json() as any;
-      finalAudioMime = (metaData.mimeType || 'audio/webm').split(';')[0];
+      if (metaData.mimeType) finalAudioMime = metaData.mimeType.split(';')[0];
 
-      sendProgress(15, 'Downloading from Google Drive...');
+      sendProgress(15, 'Downloading audio from Google Drive...');
       const downloadRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`, {
         headers: { 'Authorization': `Bearer ${activeToken}` },
       });
@@ -177,12 +178,12 @@ router.post('/process-meeting', async (req, res) => {
       finalAudioBase64 = driveBuffer.toString('base64');
       finalAudioUrl = driveFileUrl;
 
-      const extension = finalAudioMime.split('/')[1]?.split(';')[0] || 'webm';
-      const driveInputPath = path.join(UPLOADS_DIR, `${meetingId || 'temp'}_drive_file.${extension}`);
+      const extension = (finalAudioMime.split('/')[1]?.split(';')[0] || 'webm').replace(/[^a-zA-Z0-9]/g, '');
+      const driveInputPath = path.join(UPLOADS_DIR, `${safeMeetingId}_drive_file.${extension}`);
       fs.writeFileSync(driveInputPath, driveBuffer);
 
       sendProgress(22, 'Transcoding Drive audio...');
-      const convertedWavPath = path.join(UPLOADS_DIR, `${meetingId || 'temp'}_converted.wav`);
+      const convertedWavPath = path.join(UPLOADS_DIR, `${safeMeetingId}_converted.wav`);
       try {
         await transcodeToWav(driveInputPath, convertedWavPath);
         finalAudioBase64 = fs.readFileSync(convertedWavPath).toString('base64');
@@ -194,19 +195,19 @@ router.post('/process-meeting', async (req, res) => {
 
     // Handle direct audio upload
     if (audioBase64) {
-      const rawExtension = finalAudioMime.split('/')[1] || 'webm';
+      const rawExtension = (finalAudioMime.split('/')[1] || 'webm').replace(/[^a-zA-Z0-9]/g, '');
       sendProgress(12, 'Storing recording...');
-      const rawInputPath = path.join(UPLOADS_DIR, `${meetingId || 'temp'}_input.${rawExtension}`);
+      const rawInputPath = path.join(UPLOADS_DIR, `${safeMeetingId}_input.${rawExtension}`);
       fs.writeFileSync(rawInputPath, Buffer.from(audioBase64, 'base64'));
 
       if (!hasPreTranscribedText) {
         sendProgress(20, 'Converting audio format...');
-        const convertedWavPath = path.join(UPLOADS_DIR, `${meetingId || 'temp'}_converted.wav`);
+        const convertedWavPath = path.join(UPLOADS_DIR, `${safeMeetingId}_converted.wav`);
         try {
           await transcodeToWav(rawInputPath, convertedWavPath);
           finalAudioBase64 = fs.readFileSync(convertedWavPath).toString('base64');
           finalAudioMime = 'audio/wav';
-          finalAudioUrl = `/api/audio/${meetingId}`;
+          finalAudioUrl = `/api/audio/${safeMeetingId}`;
           sendProgress(30, 'Audio converted successfully.');
         } catch {
           logger.warn('MeetingRoutes', 'Audio transcode failed, using raw');
@@ -312,13 +313,13 @@ router.post('/process-meeting', async (req, res) => {
 
         if (audioSizeMB > 24) {
           sendProgress(65, 'Chunking large audio...');
-          const tempSourcePath = path.join(UPLOADS_DIR, `${meetingId || 'temp'}_to_chunk.wav`);
+          const tempSourcePath = path.join(UPLOADS_DIR, `${safeMeetingId}_to_chunk.wav`);
           fs.writeFileSync(tempSourcePath, audioBuffer);
-          const chunkPattern = path.join(UPLOADS_DIR, `${meetingId || 'temp'}_chunk_%03d.wav`);
+          const chunkPattern = path.join(UPLOADS_DIR, `${safeMeetingId}_chunk_%03d.wav`);
           await chunkAudio(tempSourcePath, chunkPattern);
 
           const chunkFiles = fs.readdirSync(UPLOADS_DIR)
-            .filter(f => f.startsWith(`${meetingId || 'temp'}_chunk_`) && f.endsWith('.wav'))
+            .filter(f => f.startsWith(`${safeMeetingId}_chunk_`) && f.endsWith('.wav'))
             .sort();
 
           let combinedTranscript = '';
@@ -326,13 +327,13 @@ router.post('/process-meeting', async (req, res) => {
             sendProgress(65 + Math.floor((i / chunkFiles.length) * 10), `Transcribing chunk ${i + 1}/${chunkFiles.length}...`);
             const chunkPath = path.join(UPLOADS_DIR, chunkFiles[i]);
             const chunkBuffer = fs.readFileSync(chunkPath);
-            combinedTranscript += await transcribeWithGemini(chunkBuffer, 'audio/wav', meetingId || 'temp') + ' ';
+            combinedTranscript += await transcribeWithGemini(chunkBuffer, 'audio/wav', safeMeetingId) + ' ';
             try { fs.unlinkSync(chunkPath); } catch (_e) {}
           }
           try { fs.unlinkSync(tempSourcePath); } catch (_e) {}
           transcriptText = combinedTranscript.trim();
         } else {
-          transcriptText = await transcribeWithGemini(audioBuffer, finalAudioMime || 'audio/wav', meetingId || 'temp');
+          transcriptText = await transcribeWithGemini(audioBuffer, finalAudioMime || 'audio/wav', safeMeetingId);
         }
       } catch (transcribeErr: any) {
         logger.warn('MeetingRoutes', 'Transcription failed', { error: transcribeErr.message });

@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/employees/$(request.auth.uid)).data;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        getUserData().role == 'admin' ||
+        getUserData().stakeholderType == 'admin' ||
+        request.auth.token.role == 'admin'
+      );
+    }
+
+    // ─── 1. Settings Collection (HIGH SECURITY) ────────────────
+    // Lock down settings so client SDK cannot read or steal API keys
+    match /settings/{settingDoc} {
+      allow read, write: if false; // Only backend Firebase Admin SDK can access
+    }
+
+    // ─── 2. Employees & Stakeholders Collection ────────────────
+    match /employees/{employeeId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // ─── 3. Meetings Collection ───────────────────────────────
+    match /meetings/{meetingId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // ─── 4. Tasks Collection ──────────────────────────────────
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // ─── 5. Roles & Permissions Collection ─────────────────────
+    match /roles/{roleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // ─── 6. Recycle Bin Collection ────────────────────────────
+    match /recycle_bin/{itemId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // ─── Default Fallback ─────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}
