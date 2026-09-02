@@ -60,7 +60,14 @@ export function getGenAI(): GoogleGenAI {
 
 // ─── Resilient Generation ──────────────────────────────────
 
-const MODEL_CANDIDATES = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
+const MODEL_CANDIDATES = [
+  'gemini-2.5-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash'
+];
 
 export async function generateContentWithResilience(ai: GoogleGenAI, params: any): Promise<any> {
   let lastError: any = null;

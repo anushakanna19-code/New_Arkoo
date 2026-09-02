@@ -634,9 +634,9 @@ export function SettingsModule({
                 <div>
                   <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-900">
                     <Activity className="w-5 h-5 text-blue-600 animate-pulse" />
-                    OpenAI API Diagnostics
+                    AI Engine Diagnostics & API Key
                   </CardTitle>
-                  <p className="text-xs text-slate-500 mt-0.5">Verify real-time connectivity, active model statuses, and credential pathways.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Verify real-time connectivity, active model statuses, and configure your Gemini AI credentials.</p>
                 </div>
                 <Button 
                   onClick={performDiagnostic} 
@@ -651,15 +651,15 @@ export function SettingsModule({
             </CardHeader>
 
             <CardContent className="p-6 space-y-6 bg-white">
-              {/* OpenAI API Key Input */}
+              {/* Gemini AI API Key Input */}
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
                 <Label className="text-xs font-bold text-slate-700 block">
-                  OpenAI API Key
+                  Google Gemini API Key
                 </Label>
                 <div className="flex gap-2">
                   <Input
                     type="password"
-                    placeholder="sk-... (Paste your OpenAI API Key here)"
+                    placeholder="AIzaSy... (Paste your Google Gemini API Key here)"
                     value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                     className="text-xs font-mono border-slate-200 bg-white rounded-xl flex-1"
@@ -673,8 +673,18 @@ export function SettingsModule({
                     {savingKey ? "Saving..." : "Save Key"}
                   </Button>
                 </div>
+
+                {apiKeyInput.trim().startsWith('sk-') && (
+                  <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2 mt-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      Detected OpenAI key format (<code className="font-mono text-[11px] bg-amber-100 px-1 py-0.5 rounded">sk-...</code>). Arkoo AI engine runs on <strong>Google Gemini</strong>. Please use an API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="underline font-bold text-blue-600">Google AI Studio</a>.
+                    </span>
+                  </div>
+                )}
+
                 <p className="text-[11px] text-slate-400">
-                  Paste your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-blue-600 underline">OpenAI Platform</a> to use your account quota for transcription and generation.
+                  Get your free Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">Google AI Studio</a> to power transcription, diarization, and MOM generation.
                 </p>
               </div>
 
@@ -683,7 +693,7 @@ export function SettingsModule({
                 <div className="flex items-center justify-center p-6 bg-slate-50 rounded-xl border border-slate-100 animate-pulse">
                   <div className="flex flex-col items-center gap-2">
                     <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
-                    <p className="text-xs font-semibold text-slate-600 font-sans">Testing OpenAI API endpoint status...</p>
+                    <p className="text-xs font-semibold text-slate-600 font-sans">Testing Gemini AI API endpoint status...</p>
                   </div>
                 </div>
               ) : diagnostic ? (

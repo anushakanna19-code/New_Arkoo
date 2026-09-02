@@ -51,7 +51,14 @@ router.get('/gemini-diagnostic', async (_req, res) => {
     maskedKey = `${activeKey.substring(0, 6)}...${activeKey.substring(activeKey.length - 4)}`;
   }
 
-  const modelCandidates = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
+  const modelCandidates = [
+    'gemini-2.5-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-2.5-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash'
+  ];
   const results: { model: string; status: string; error?: string }[] = [];
   let succeedingModel = '';
   let fullResponse = '';
