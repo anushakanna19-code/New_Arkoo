@@ -153,4 +153,21 @@ router.post('/cloudinary/save-keys', async (req, res) => {
   }
 });
 
+// ─── Compatibility Aliases ─────────────────────────────────
+router.get('/openai-diagnostic', (req, res, next) => {
+  req.url = '/gemini-diagnostic';
+  router.handle(req, res, next);
+});
+
+router.post('/openai/save-key', (req, res, next) => {
+  req.url = '/gemini/save-key';
+  router.handle(req, res, next);
+});
+
+router.get('/openai/status', (_req, res) => {
+  const localSettings = loadGeminiSettings();
+  const hasKey = !!(localSettings?.apiKey || process.env.GEMINI_API_KEY);
+  res.json({ connected: hasKey, active: hasKey });
+});
+
 export default router;

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { doc, updateDoc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db, authenticateGoogleDrive, auth } from '@/lib/firebase';
+import { getApiUrl, getAuthHeaders } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -234,15 +235,17 @@ export function SettingsModule({
 
   const handleSaveOpenaiKey = async () => {
     if (!apiKeyInput.trim()) {
-      toast.error('Please enter a valid OpenAI API Key.');
+      toast.error('Please enter a valid AI API Key.');
       return;
     }
     setSavingKey(true);
     try {
-      const res = await fetch('/api/openai/save-key', {
+      const url = getApiUrl('/api/gemini/save-key');
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: apiKeyInput })
+        headers: authHeaders,
+        body: JSON.stringify({ apiKey: apiKeyInput.trim() })
       });
 
       const text = await res.text();
@@ -252,14 +255,14 @@ export function SettingsModule({
       } catch (e) {}
 
       if (res.ok && data.success) {
-        toast.success('OpenAI API Key saved successfully!');
+        toast.success('AI API Key saved successfully!');
         setApiKeyInput('');
         performDiagnostic();
       } else {
-        throw new Error(data.error || 'Failed to save OpenAI API Key');
+        throw new Error(data.error || 'Failed to save AI API Key');
       }
     } catch (err: any) {
-      toast.error(err.message || 'Failed to save OpenAI API key');
+      toast.error(err.message || 'Failed to save AI API key');
     } finally {
       setSavingKey(false);
     }
@@ -268,16 +271,25 @@ export function SettingsModule({
   const performDiagnostic = async () => {
     setTesting(true);
     try {
-      const response = await fetch('/api/openai-diagnostic');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const url = getApiUrl('/api/gemini-diagnostic');
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(url, { headers: authHeaders });
+      
+      const text = await response.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (parseErr) {
+        throw new Error(`Server returned non-JSON response (status: ${response.status})`);
       }
-      const data = await response.json();
+
       setDiagnostic(data);
-      if (data.success) {
-        toast.success("OpenAI Key verification test succeeded!");
+      if (response.ok && data.success) {
+        toast.success("AI Key verification test succeeded!");
+      } else if (data.status) {
+        toast.error(`AI Key Test Status: ${data.status}`);
       } else {
-        toast.error(`OpenAI Key Test Failed: ${data.status}`);
+        toast.error(data.error || `Diagnostic check failed (status ${response.status})`);
       }
     } catch (err: any) {
       toast.error(`Could not complete Diagnostic check: ${err.message || err}`);
@@ -312,9 +324,13 @@ export function SettingsModule({
 
   const fetchGDriveStatus = async () => {
     try {
-      const response = await fetch('/api/gdrive/status');
+      const url = getApiUrl('/api/gdrive/status');
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(url, { headers: authHeaders });
       if (response.ok) {
-        const data = await response.json();
+        const text = await response.text();
+        let data: any = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (e) {}
         setGdrive(data);
         if (data.folderLink) {
           setFolderLinkInput(data.folderLink);
@@ -331,12 +347,15 @@ export function SettingsModule({
     }
   };
 
-
   const fetchOpenaiStatus = async () => {
     try {
-      const res = await fetch('/api/openai/status');
+      const url = getApiUrl('/api/openai/status');
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(url, { headers: authHeaders });
       if (res.ok) {
-        const data = await res.json();
+        const text = await res.text();
+        let data: any = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (e) {}
         setOpenaiData(data);
       }
     } catch (err) {
@@ -348,26 +367,30 @@ export function SettingsModule({
 
   const handleSaveOpenaiIntegrationKey = async () => {
     if (!openaiKeyInput.trim()) {
-      toast.error('Please enter a valid OpenAI API Key.');
+      toast.error('Please enter a valid AI API Key.');
       return;
     }
     setSavingOpenai(true);
     try {
-      const res = await fetch('/api/openai/save-key', {
+      const url = getApiUrl('/api/gemini/save-key');
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: openaiKeyInput })
+        headers: authHeaders,
+        body: JSON.stringify({ apiKey: openaiKeyInput.trim() })
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try { data = text ? JSON.parse(text) : {}; } catch (e) {}
       if (res.ok) {
-        toast.success(data.message || 'OpenAI API Key saved successfully.');
+        toast.success(data.message || 'AI API Key saved successfully.');
         setOpenaiKeyInput('');
         fetchOpenaiStatus();
       } else {
-        toast.error(data.error || 'Failed to save OpenAI API Key.');
+        toast.error(data.error || 'Failed to save AI API Key.');
       }
     } catch (err: any) {
-      toast.error(`Error saving OpenAI config: ${err.message}`);
+      toast.error(`Error saving AI config: ${err.message}`);
     } finally {
       setSavingOpenai(false);
     }
@@ -392,11 +415,11 @@ export function SettingsModule({
       const authResult = await authenticateGoogleDrive();
       if (!authResult) return;
 
-      const res = await fetch('/api/gdrive/save-token', {
+      const url = getApiUrl('/api/gdrive/save-token');
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: authHeaders,
         body: JSON.stringify({
           accessToken: authResult.accessToken,
           userEmail: authResult.email
@@ -407,7 +430,9 @@ export function SettingsModule({
         toast.success("Google Drive successfully authorized!");
         fetchGDriveStatus();
       } else {
-        const err = await res.json();
+        const text = await res.text();
+        let err: any = {};
+        try { err = text ? JSON.parse(text) : {}; } catch (e) {}
         throw new Error(err.error || "Failed to save Google Drive token.");
       }
     } catch (err: any) {
@@ -420,7 +445,9 @@ export function SettingsModule({
       return;
     }
     try {
-      const res = await fetch('/api/gdrive/disconnect', { method: 'POST' });
+      const url = getApiUrl('/api/gdrive/disconnect');
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(url, { method: 'POST', headers: authHeaders });
       if (res.ok) {
         toast.success("Google Drive disconnected successfully.");
         fetchGDriveStatus();
@@ -439,17 +466,21 @@ export function SettingsModule({
     }
     setValidatingFolder(true);
     try {
-      const res = await fetch('/api/gdrive/save-folder', {
+      const url = getApiUrl('/api/gdrive/save-folder');
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
-          folderLink: folderLinkInput,
+          folderLink: folderLinkInput.trim(),
           googleAccessToken: gdrive.accessToken || null
         })
       });
 
       if (!res.ok) {
-        const err = await res.json();
+        const text = await res.text();
+        let err: any = {};
+        try { err = text ? JSON.parse(text) : {}; } catch (e) {}
         throw new Error(err.error || "Folder validation failed.");
       }
 
