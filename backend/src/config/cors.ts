@@ -6,7 +6,8 @@ import { env } from './env.js';
  */
 export function getCorsHeaders(origin: string | undefined): Record<string, string> {
   const headers: Record<string, string> = {
-    'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',
+    'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Range',
+    'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length, Content-Type',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Max-Age': '86400', // 24 hours preflight cache
   };

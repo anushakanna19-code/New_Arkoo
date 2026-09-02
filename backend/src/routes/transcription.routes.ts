@@ -155,23 +155,30 @@ router.post('/tasks/voice-note', async (req, res) => {
 router.get('/audio/:meetingId', (req, res) => {
   const { meetingId } = req.params;
   try {
-    const convertedWavPath = path.join(UPLOADS_DIR, `${meetingId}_converted.wav`);
-    const convertedMp3Path = path.join(UPLOADS_DIR, `${meetingId}_converted.mp3`);
+    const safeMeetingId = (meetingId || '').toString().replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeMeetingId) {
+      return res.status(400).json({ error: 'Invalid meeting ID' });
+    }
+
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    const convertedWavPath = path.join(UPLOADS_DIR, `${safeMeetingId}_converted.wav`);
+    const convertedMp3Path = path.join(UPLOADS_DIR, `${safeMeetingId}_converted.mp3`);
 
     if (fs.existsSync(convertedWavPath)) {
       res.setHeader('Content-Type', 'audio/wav');
       return res.sendFile(convertedWavPath);
     } else if (fs.existsSync(convertedMp3Path)) {
-      res.setHeader('Content-Type', 'audio/mp3');
+      res.setHeader('Content-Type', 'audio/mpeg');
       return res.sendFile(convertedMp3Path);
     }
 
     const files = fs.readdirSync(UPLOADS_DIR);
-    const rawFile = files.find(f => f.startsWith(`${meetingId}_input.`));
+    const rawFile = files.find(f => f.startsWith(`${safeMeetingId}_input.`));
     if (rawFile) {
       const rawPath = path.join(UPLOADS_DIR, rawFile);
       const ext = path.extname(rawFile).substring(1);
-      const mime = ext === 'm4a' ? 'audio/m4a' : ext === 'mp3' ? 'audio/mp3' : ext === 'wav' ? 'audio/wav' : 'audio/webm';
+      const mime = ext === 'm4a' ? 'audio/m4a' : ext === 'mp3' ? 'audio/mpeg' : ext === 'wav' ? 'audio/wav' : 'audio/webm';
       res.setHeader('Content-Type', mime);
       return res.sendFile(rawPath);
     }

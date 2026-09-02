@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Markdown from 'react-markdown';
 import { 
   collection, 
@@ -18,6 +18,7 @@ import {
 import { doc as firestoreDoc } from 'firebase/firestore';
 import { db, auth, storage } from '@/lib/firebase';
 import { getApiUrl } from '@/lib/api';
+import { saveAudioToLocalCache, getAudioFromLocalCache } from '@/lib/audio-cache';
 import { parseRelativeDeadline, formatDeadlineDisplay } from '@/lib/date-utils';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
@@ -540,65 +541,36 @@ export function MeetingModule({
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          channelCount: 1,
-          sampleRate: 16000
         } 
       });
 
       rawStreamRef.current = stream;
 
-      let processedStream = stream;
-      try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-          const audioCtx = new AudioContextClass({ sampleRate: 16000 });
-          audioContextRef.current = audioCtx;
-
-          const source = audioCtx.createMediaStreamSource(stream);
-          const filterHighPass = audioCtx.createBiquadFilter();
-          filterHighPass.type = 'highpass';
-          filterHighPass.frequency.value = 80;
-
-          const filterLowPass = audioCtx.createBiquadFilter();
-          filterLowPass.type = 'lowpass';
-          filterLowPass.frequency.value = 7500;
-
-          const dest = audioCtx.createMediaStreamDestination();
-          source.connect(filterHighPass);
-          filterHighPass.connect(filterLowPass);
-          filterLowPass.connect(dest);
-
-          processedStream = dest.stream;
-        }
-      } catch (dspError) {
-        console.warn('[Audio DSP Warning] Voice isolation filters failed, proceeding with raw mic stream:', dspError);
-        processedStream = stream;
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = MediaRecorder.isTypeSupported('audio/webm') 
+          ? 'audio/webm' 
+          : MediaRecorder.isTypeSupported('audio/mp4') 
+          ? 'audio/mp4' 
+          : '';
       }
 
-      const options = {
-        audioBitsPerSecond: 32000,
-        mimeType: 'audio/webm;codecs=opus'
-      };
+      const recorderOptions: MediaRecorderOptions = {};
+      if (mimeType) {
+        recorderOptions.mimeType = mimeType;
+      }
 
-      const MIME_TYPE = MediaRecorder.isTypeSupported(options.mimeType) 
-        ? options.mimeType 
-        : 'audio/webm';
-
-      mediaRecorder.current = new MediaRecorder(processedStream, {
-        audioBitsPerSecond: options.audioBitsPerSecond,
-        mimeType: MIME_TYPE
-      });
-
+      mediaRecorder.current = new MediaRecorder(stream, recorderOptions);
       audioChunks.current = [];
 
       mediaRecorder.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           audioChunks.current.push(event.data);
         }
       };
 
       mediaRecorder.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunks.current, { type: MIME_TYPE });
+        const audioBlob = new Blob(audioChunks.current, { type: mimeType || 'audio/webm' });
         await processAudio(audioBlob, finalDurationRef.current);
       };
 
@@ -699,6 +671,9 @@ export function MeetingModule({
       const meetingColRef = collection(db, 'meetings');
       const meetingRef = doc(meetingColRef);
       meetingRefId = meetingRef.id;
+
+      // Cache audio locally in browser IndexedDB for instant playback & download with sound
+      await saveAudioToLocalCache(meetingRefId, blob);
 
       const titleToUse = meetingTitle.trim() || `Meeting ${format(new Date(), 'yyyy-MM-dd HH:mm')}`;
       const currentUserName = profile?.fullName || profile?.displayName || auth.currentUser?.displayName || (auth.currentUser?.email ? auth.currentUser.email.split('@')[0] : 'Host');
@@ -1733,24 +1708,57 @@ export function MeetingModule({
   );
 }
 
-function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: string }) {
+function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: string; title: string; meetingId?: string }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
 
-  const isDriveUrl = audioUrl.includes('drive.google.com') || audioUrl.includes('googleapis.com/drive');
+  // Check if locally cached audio exists in browser IndexedDB for this meeting
+  useEffect(() => {
+    let active = true;
+    if (meetingId) {
+      getAudioFromLocalCache(meetingId).then((blob) => {
+        if (active && blob && blob.size > 0) {
+          const url = URL.createObjectURL(blob);
+          setLocalBlobUrl(url);
+          setIsLoaded(true);
+        }
+      });
+    }
+    return () => {
+      active = false;
+      if (localBlobUrl) {
+        URL.revokeObjectURL(localBlobUrl);
+      }
+    };
+  }, [meetingId]);
+
+  const effectiveAudioUrl = useMemo(() => {
+    if (localBlobUrl) return localBlobUrl;
+    if (!audioUrl) return '';
+    return getApiUrl(audioUrl);
+  }, [localBlobUrl, audioUrl]);
+
+  const isDriveUrl = !localBlobUrl && (audioUrl?.includes('drive.google.com') || audioUrl?.includes('googleapis.com/drive'));
 
   const togglePlay = () => {
     if (!audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
+      setIsPlaying(false);
     } else {
-      audioRef.current.play();
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch(err => {
+        console.warn('[Audio Player] Play failed:', err);
+        setIsPlaying(false);
+      });
     }
-    setIsPlaying(!isPlaying);
   };
 
   const handleTimeUpdate = () => {
@@ -1764,6 +1772,7 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
         setDuration(dur);
       }
       setIsLoaded(true);
+      setHasError(false);
     }
   };
 
@@ -1793,11 +1802,18 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
       {/* Header */}
-      <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-        <div className="w-6 h-6 rounded-lg bg-blue-100/70 text-blue-500 flex items-center justify-center text-xs">
-          🎙️
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+          <div className="w-6 h-6 rounded-lg bg-blue-100/70 text-blue-500 flex items-center justify-center text-xs">
+            🎙️
+          </div>
+          Meeting Audio Recording
         </div>
-        Meeting Audio Recording
+        {localBlobUrl && (
+          <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2.5 py-0.5 rounded-full border border-emerald-200">
+            ✓ HD Recording
+          </span>
+        )}
       </div>
 
       {isDriveUrl ? (
@@ -1818,19 +1834,22 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
           </a>
         </div>
       ) : (
-        /* Local / Firebase Storage audio — stream inline */
+        /* Local / Cloud audio — stream inline */
         <div className="space-y-4">
           {/* Hidden native audio element */}
           <audio
             ref={audioRef}
-            src={audioUrl}
+            src={effectiveAudioUrl}
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleLoadedMetadata}
             onDurationChange={handleLoadedMetadata}
             onCanPlay={handleLoadedMetadata}
             onEnded={handleEnded}
-            preload="metadata"
-            crossOrigin="anonymous"
+            onError={(e) => {
+              console.warn('[Audio Player] Audio load error for', effectiveAudioUrl, e);
+              setHasError(true);
+            }}
+            preload="auto"
           />
 
           {/* Waveform visual placeholder + play button */}
@@ -1915,17 +1934,25 @@ function MeetingAudioPlayer({ audioUrl, title }: { audioUrl: string; title: stri
 
             {/* Download */}
             <a
-              href={audioUrl}
+              href={effectiveAudioUrl}
               download={`${title || 'meeting'}_recording.webm`}
+              target="_blank"
+              rel="noreferrer"
               className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-700 transition-colors"
             >
               <Download className="w-3.5 h-3.5" /> Download Audio
             </a>
           </div>
 
-          {!isLoaded && (
+          {!isLoaded && !hasError && (
             <p className="text-[10px] text-slate-400 text-center font-medium animate-pulse">
-              Loading audio file...
+              Buffering audio stream...
+            </p>
+          )}
+
+          {hasError && (
+            <p className="text-[10px] text-rose-500 text-center font-medium">
+              Audio stream could not be loaded from server. Please check backend connection.
             </p>
           )}
         </div>
@@ -2595,7 +2622,7 @@ function MeetingDetail({ meeting, onBack, onDelete, profile, employees = [] }: {
                       <span className="text-sm">🎙️</span>
                       <span className="uppercase tracking-wider">Meeting Recording for A</span>
                     </div>
-                    <MeetingAudioPlayer audioUrl={currentMeeting.audioUrl} title={currentMeeting.title} />
+                    <MeetingAudioPlayer audioUrl={currentMeeting.audioUrl} title={currentMeeting.title} meetingId={currentMeeting.id} />
                   </div>
                 )}
               </div>
@@ -2694,7 +2721,7 @@ function MeetingDetail({ meeting, onBack, onDelete, profile, employees = [] }: {
 
           {/* Meeting Audio Player — shown standalone only when no discussionPoints exist */}
           {currentMeeting.audioUrl && discussionPoints.length === 0 && (
-            <MeetingAudioPlayer audioUrl={currentMeeting.audioUrl} title={currentMeeting.title} />
+            <MeetingAudioPlayer audioUrl={currentMeeting.audioUrl} title={currentMeeting.title} meetingId={currentMeeting.id} />
           )}
         </div>
 
