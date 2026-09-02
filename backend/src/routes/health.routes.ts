@@ -3,20 +3,44 @@ import { Router } from 'express';
 const router = Router();
 
 /**
- * Liveness probe — returns 200 if the process is running.
+ * Root service status — returns 200 with service information.
+ * Accessible at https://new-arkoo.onrender.com/
  */
-router.get('/health', (_req, res) => {
+router.get('/', (_req, res) => {
+  res.json({
+    service: 'arkoo-backend',
+    name: 'Arkoo CRM Backend API',
+    status: 'healthy',
+    version: '2.0.0',
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      apiHealth: '/api/health',
+      readiness: '/readiness',
+      apiReadiness: '/api/readiness',
+    },
+  });
+});
+
+/**
+ * Liveness probes — returns 200 if the process is running.
+ * Accessible at /health and /api/health
+ */
+router.get(['/health', '/api/health'], (_req, res) => {
   res.json({
     status: 'healthy',
-    uptime: process.uptime(),
+    service: 'arkoo-backend',
+    uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
 });
 
 /**
- * Readiness probe — checks critical dependencies.
+ * Readiness probes — checks critical dependencies and active AI engines.
+ * Accessible at /readiness and /api/readiness
  */
-router.get('/readiness', async (_req, res) => {
+router.get(['/readiness', '/api/readiness'], async (_req, res) => {
   const checks: Record<string, string> = {};
 
   // Check Firebase
@@ -26,6 +50,15 @@ router.get('/readiness', async (_req, res) => {
     checks.firestore = db ? 'connected' : 'unavailable';
   } catch {
     checks.firestore = 'error';
+  }
+
+  // Check OpenAI API key
+  try {
+    const { getOpenaiApiKey } = await import('../services/openai.service.js');
+    const hasOpenaiKey = !!getOpenaiApiKey();
+    checks.openai = hasOpenaiKey ? 'configured' : 'not_configured';
+  } catch {
+    checks.openai = 'not_configured';
   }
 
   // Check Gemini API key

@@ -8,8 +8,9 @@ import gdriveRoutes from './gdrive.routes.js';
 
 const router = Router();
 
-// ─── Health (no /api prefix) ───────────────────────────────
+// ─── Health Probes (root and /api) ─────────────────────────
 router.use('/', healthRoutes);
+router.use('/api', healthRoutes);
 
 // ─── API Routes ────────────────────────────────────────────
 router.use('/api', emailRoutes);
