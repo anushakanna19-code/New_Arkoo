@@ -372,45 +372,56 @@ export function AdminDashboard({ profile }: { profile: any }) {
         </Card>
 
         {/* Activity & Alerts */}
-        <Card className="bg-slate-900 border-slate-800 text-white">
+        <Card className="bg-white border-slate-200 shadow-xs">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-white">
-                <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+              <CardTitle className="flex items-center gap-2 text-slate-900">
+                <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
                 </div>
                 System Alerts
               </CardTitle>
               {alerts.length > 0 && (
                 <button 
                   onClick={() => setAlerts([])}
-                  className="text-[10px] font-semibold tracking-wide text-slate-500 hover:text-white transition-colors cursor-pointer"
+                  className="text-[11px] font-bold text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
                   id="clear-alerts-btn"
                 >
                   CLEAR
                 </button>
               )}
             </div>
+            <CardDescription>Live system notifications & updates</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {alerts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 opacity-40 text-[13px] text-slate-300">
+                <div className="flex flex-col items-center justify-center py-10 text-slate-400 text-[13px]">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mb-2 opacity-60" />
                   No recent system alerts.
                 </div>
               ) : alerts.map((alert, idx) => (
-                <div key={idx} className={`flex gap-3 border-l-2 pl-3.5 py-1 ${
-                  alert.color === 'amber' ? 'border-amber-400' : 
-                  alert.color === 'blue' ? 'border-blue-400' : 
-                  alert.color === 'green' ? 'border-emerald-400' : 'border-slate-600'
-                }`}>
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-white leading-tight">{alert.title}</p>
-                    <p className="text-[11px] text-slate-400 mt-1 truncate leading-tight">{alert.subtitle}</p>
-                    <p className={`text-[11px] mt-1 font-medium ${
-                      alert.color === 'amber' ? 'text-amber-400' : 
-                      alert.color === 'blue' ? 'text-blue-400' : 
-                      alert.color === 'green' ? 'text-emerald-400' : 'text-slate-400'
+                <div 
+                  key={idx} 
+                  className={`p-3 rounded-xl border flex gap-3 transition-all ${
+                    alert.color === 'amber' ? 'bg-amber-50/50 border-amber-100 text-amber-900' : 
+                    alert.color === 'blue' ? 'bg-blue-50/50 border-blue-100 text-blue-900' : 
+                    alert.color === 'green' ? 'bg-emerald-50/50 border-emerald-100 text-emerald-900' : 
+                    'bg-slate-50 border-slate-100 text-slate-800'
+                  }`}
+                >
+                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                    alert.color === 'amber' ? 'bg-amber-500' : 
+                    alert.color === 'blue' ? 'bg-blue-500' : 
+                    alert.color === 'green' ? 'bg-emerald-500' : 'bg-slate-400'
+                  }`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-bold text-slate-900 leading-tight">{alert.title}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 truncate leading-tight">{alert.subtitle}</p>
+                    <p className={`text-[11px] mt-1 font-semibold ${
+                      alert.color === 'amber' ? 'text-amber-700' : 
+                      alert.color === 'blue' ? 'text-blue-700' : 
+                      alert.color === 'green' ? 'text-emerald-700' : 'text-slate-600'
                     }`}>{alert.detail}</p>
                   </div>
                 </div>
