@@ -63,6 +63,9 @@ export const env = {
   CLOUDINARY_API_KEY: (process.env.CLOUDINARY_API_KEY || '').trim(),
   CLOUDINARY_API_SECRET: (process.env.CLOUDINARY_API_SECRET || '').trim(),
 
+  // OpenAI AI
+  OPENAI_API_KEY: (process.env.OPENAI_API_KEY || '').trim(),
+
   // Google OAuth
   GOOGLE_CLIENT_ID: (process.env.GOOGLE_CLIENT_ID || process.env.OAUTH_CLIENT_ID || '').trim(),
   GOOGLE_CLIENT_SECRET: (process.env.GOOGLE_CLIENT_SECRET || process.env.OAUTH_CLIENT_SECRET || '').trim(),
@@ -76,6 +79,10 @@ export const GDRIVE_SETTINGS_FILE = fs.existsSync(path.join(CONFIG_DIR, 'gdrive-
 export const GEMINI_SETTINGS_FILE = fs.existsSync(path.join(CONFIG_DIR, 'gemini-settings.json'))
   ? path.join(CONFIG_DIR, 'gemini-settings.json')
   : path.join(process.cwd(), 'gemini-settings.json');
+
+export const OPENAI_SETTINGS_FILE = fs.existsSync(path.join(CONFIG_DIR, 'openai-settings.json'))
+  ? path.join(CONFIG_DIR, 'openai-settings.json')
+  : path.join(process.cwd(), 'openai-settings.json');
 
 export const CLOUDINARY_SETTINGS_FILE = fs.existsSync(path.join(CONFIG_DIR, 'cloudinary-settings.json'))
   ? path.join(CONFIG_DIR, 'cloudinary-settings.json')

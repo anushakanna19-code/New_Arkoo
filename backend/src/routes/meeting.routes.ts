@@ -2,6 +2,7 @@ import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { getGenAI, generateContentWithResilience, transcribeWithGemini } from '../services/gemini.service.js';
+import { getOpenaiApiKey, transcribeWithOpenai, generateContentWithOpenai } from '../services/openai.service.js';
 import { sendTaskAssignmentEmail } from '../services/email.service.js';
 import { uploadAudioToCloudinary } from '../services/cloudinary.service.js';
 import * as gdrive from '../services/gdrive.service.js';
@@ -309,31 +310,44 @@ router.post('/process-meeting', async (req, res) => {
       sendProgress(62, 'Transcribing speech...');
       try {
         const audioBuffer = fileContentBuffer;
-        const audioSizeMB = audioBuffer.length / (1024 * 1024);
+        const openaiKey = getOpenaiApiKey();
 
-        if (audioSizeMB > 24) {
-          sendProgress(65, 'Chunking large audio...');
-          const tempSourcePath = path.join(UPLOADS_DIR, `${safeMeetingId}_to_chunk.wav`);
-          fs.writeFileSync(tempSourcePath, audioBuffer);
-          const chunkPattern = path.join(UPLOADS_DIR, `${safeMeetingId}_chunk_%03d.wav`);
-          await chunkAudio(tempSourcePath, chunkPattern);
-
-          const chunkFiles = fs.readdirSync(UPLOADS_DIR)
-            .filter(f => f.startsWith(`${safeMeetingId}_chunk_`) && f.endsWith('.wav'))
-            .sort();
-
-          let combinedTranscript = '';
-          for (let i = 0; i < chunkFiles.length; i++) {
-            sendProgress(65 + Math.floor((i / chunkFiles.length) * 10), `Transcribing chunk ${i + 1}/${chunkFiles.length}...`);
-            const chunkPath = path.join(UPLOADS_DIR, chunkFiles[i]);
-            const chunkBuffer = fs.readFileSync(chunkPath);
-            combinedTranscript += await transcribeWithGemini(chunkBuffer, 'audio/wav', safeMeetingId) + ' ';
-            try { fs.unlinkSync(chunkPath); } catch (_e) {}
+        if (openaiKey) {
+          try {
+            sendProgress(65, 'Transcribing audio with OpenAI Whisper...');
+            transcriptText = await transcribeWithOpenai(audioBuffer, `${safeMeetingId}.wav`, knownNames);
+            logger.info('MeetingRoutes', 'Transcribed with OpenAI Whisper successfully');
+          } catch (whisperErr: any) {
+            logger.warn('MeetingRoutes', `OpenAI Whisper failed: ${whisperErr.message}. Falling back to Gemini.`);
           }
-          try { fs.unlinkSync(tempSourcePath); } catch (_e) {}
-          transcriptText = combinedTranscript.trim();
-        } else {
-          transcriptText = await transcribeWithGemini(audioBuffer, finalAudioMime || 'audio/wav', safeMeetingId);
+        }
+
+        if (!transcriptText) {
+          const audioSizeMB = audioBuffer.length / (1024 * 1024);
+          if (audioSizeMB > 24) {
+            sendProgress(65, 'Chunking large audio...');
+            const tempSourcePath = path.join(UPLOADS_DIR, `${safeMeetingId}_to_chunk.wav`);
+            fs.writeFileSync(tempSourcePath, audioBuffer);
+            const chunkPattern = path.join(UPLOADS_DIR, `${safeMeetingId}_chunk_%03d.wav`);
+            await chunkAudio(tempSourcePath, chunkPattern);
+
+            const chunkFiles = fs.readdirSync(UPLOADS_DIR)
+              .filter(f => f.startsWith(`${safeMeetingId}_chunk_`) && f.endsWith('.wav'))
+              .sort();
+
+            let combinedTranscript = '';
+            for (let i = 0; i < chunkFiles.length; i++) {
+              sendProgress(65 + Math.floor((i / chunkFiles.length) * 10), `Transcribing chunk ${i + 1}/${chunkFiles.length}...`);
+              const chunkPath = path.join(UPLOADS_DIR, chunkFiles[i]);
+              const chunkBuffer = fs.readFileSync(chunkPath);
+              combinedTranscript += await transcribeWithGemini(chunkBuffer, 'audio/wav', safeMeetingId) + ' ';
+              try { fs.unlinkSync(chunkPath); } catch (_e) {}
+            }
+            try { fs.unlinkSync(tempSourcePath); } catch (_e) {}
+            transcriptText = combinedTranscript.trim();
+          } else {
+            transcriptText = await transcribeWithGemini(audioBuffer, finalAudioMime || 'audio/wav', safeMeetingId);
+          }
         }
       } catch (transcribeErr: any) {
         logger.warn('MeetingRoutes', 'Transcription failed', { error: transcribeErr.message });
@@ -350,7 +364,6 @@ router.post('/process-meeting', async (req, res) => {
         transcriptText = 'Audio recording uploaded successfully. Regional operational discussion processed.';
       }
 
-      const ai = getGenAI();
       sendProgress(85, 'Analyzing transcript...');
 
       const prompt = `
@@ -382,8 +395,26 @@ router.post('/process-meeting', async (req, res) => {
         """
       `;
 
-      const completion = await ai.models.generateContent({ model: 'gemini-1.5-flash', contents: prompt });
-      let resultText = completion.text || '';
+      let resultText = '';
+      const openaiKey = getOpenaiApiKey();
+
+      if (openaiKey) {
+        try {
+          sendProgress(85, 'Analyzing transcript with OpenAI GPT-4o...');
+          const openaiRes = await generateContentWithOpenai(prompt);
+          resultText = openaiRes.text;
+        } catch (openaiErr: any) {
+          logger.warn('MeetingRoutes', `OpenAI GPT-4o analysis failed: ${openaiErr.message}. Falling back to Gemini.`);
+        }
+      }
+
+      if (!resultText) {
+        const ai = getGenAI();
+        sendProgress(85, 'Analyzing transcript with Gemini...');
+        const completion = await generateContentWithResilience(ai, { contents: prompt });
+        resultText = completion?.text || '';
+      }
+
       if (resultText.startsWith('```json')) resultText = resultText.replace(/^```json/, '').replace(/```$/, '').trim();
       else if (resultText.startsWith('```')) resultText = resultText.replace(/^```/, '').replace(/```$/, '').trim();
 

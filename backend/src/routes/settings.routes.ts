@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getGenAI, loadGeminiSettings, saveGeminiSettings } from '../services/gemini.service.js';
+import { saveOpenaiSettings, performOpenaiDiagnostic, getOpenaiApiKey } from '../services/openai.service.js';
 import { loadCloudinarySettings, saveCloudinarySettings } from '../services/cloudinary.service.js';
 import { getFirestore, admin } from '../config/firebase.js';
 import { GoogleGenAI } from '@google/genai';
@@ -160,21 +161,43 @@ router.post('/cloudinary/save-keys', async (req, res) => {
   }
 });
 
-// ─── Compatibility Aliases ─────────────────────────────────
-router.get('/openai-diagnostic', (req, res, next) => {
-  req.url = '/gemini-diagnostic';
-  router.handle(req, res, next);
+// ─── OpenAI Settings & Diagnostics ────────────────────────
+router.post('/openai/save-key', (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey || !apiKey.trim()) {
+      return res.status(400).json({ error: 'OpenAI API Key cannot be empty' });
+    }
+
+    const keyClean = apiKey.trim();
+    saveOpenaiSettings({ apiKey: keyClean, updatedAt: new Date().toISOString() });
+    logger.info('SettingsRoutes', 'OpenAI API Key updated successfully');
+    res.json({ success: true, message: 'OpenAI API Key saved successfully!' });
+  } catch (err: any) {
+    logger.error('SettingsRoutes', 'OpenAI save key error', err);
+    res.status(500).json({ error: err.message || 'Failed to save OpenAI API key' });
+  }
 });
 
-router.post('/openai/save-key', (req, res, next) => {
-  req.url = '/gemini/save-key';
-  router.handle(req, res, next);
+router.get('/openai-diagnostic', async (_req, res) => {
+  try {
+    const diagnostic = await performOpenaiDiagnostic();
+    res.json(diagnostic);
+  } catch (err: any) {
+    logger.error('SettingsRoutes', 'OpenAI diagnostic error', err);
+    res.status(500).json({
+      success: false,
+      status: 'Failed',
+      error: err.message || String(err),
+      explanation: 'Could not perform OpenAI diagnostic check.',
+    });
+  }
 });
 
 router.get('/openai/status', (_req, res) => {
-  const localSettings = loadGeminiSettings();
-  const hasKey = !!(localSettings?.apiKey || process.env.GEMINI_API_KEY);
-  res.json({ connected: hasKey, active: hasKey });
+  const apiKey = getOpenaiApiKey();
+  const connected = !!(apiKey && apiKey.length > 5);
+  res.json({ connected, active: connected });
 });
 
 export default router;

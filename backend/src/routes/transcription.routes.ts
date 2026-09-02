@@ -2,6 +2,7 @@ import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { getGenAI, generateContentWithResilience } from '../services/gemini.service.js';
+import { getOpenaiApiKey, transcribeWithOpenai } from '../services/openai.service.js';
 import { UPLOADS_DIR } from '../config/env.js';
 import { transcodeToWav } from '../utils/safe-exec.js';
 import { logger } from '../utils/logger.js';
@@ -44,19 +45,33 @@ router.post('/transcribe-chunk', async (req, res) => {
       logger.warn('TranscriptionRoutes', `ffmpeg transcode failed for chunk ${chunkIndex}, using raw fallback`);
     }
 
-    // 3. Transcribe with Gemini
-    const ai = getGenAI();
-    const response = await generateContentWithResilience(ai, {
-      contents: [
-        {
-          inlineData: { mimeType: finalMime, data: finalBase64 },
-        },
-        `Transcribe the spoken words in the audio. Keep it completely literal. IMPORTANT: If the speech is in Hindi or Hinglish, write it in Roman/English letters (transliteration) instead of Devanagari script. Output ONLY the raw transcribed text without preamble or markup. If the audio has no human speaking, respond with nothing.${knownNames ? `\n\nKNOWN TEAM MEMBERS: ${knownNames}` : ''}`,
-      ],
-    });
+    // 3. Transcribe with OpenAI Whisper or Gemini
+    let text = '';
+    const openaiKey = getOpenaiApiKey();
 
-    const text = response.text ? response.text.trim() : '';
-    logger.info('TranscriptionRoutes', `Chunk ${chunkIndex} transcribed: "${text.substring(0, 80)}..."`);
+    if (openaiKey) {
+      try {
+        const audioFile = fs.existsSync(chunkWavPath) ? chunkWavPath : chunkRawPath;
+        text = await transcribeWithOpenai(audioFile, path.basename(audioFile), knownNames);
+        logger.info('TranscriptionRoutes', `Chunk ${chunkIndex} transcribed with OpenAI Whisper: "${text.substring(0, 80)}..."`);
+      } catch (openaiErr: any) {
+        logger.warn('TranscriptionRoutes', `OpenAI Whisper transcription failed: ${openaiErr.message}. Falling back to Gemini.`);
+      }
+    }
+
+    if (!text) {
+      const ai = getGenAI();
+      const response = await generateContentWithResilience(ai, {
+        contents: [
+          {
+            inlineData: { mimeType: finalMime, data: finalBase64 },
+          },
+          `Transcribe the spoken words in the audio. Keep it completely literal. IMPORTANT: If the speech is in Hindi or Hinglish, write it in Roman/English letters (transliteration) instead of Devanagari script. Output ONLY the raw transcribed text without preamble or markup. If the audio has no human speaking, respond with nothing.${knownNames ? `\n\nKNOWN TEAM MEMBERS: ${knownNames}` : ''}`,
+        ],
+      });
+      text = response.text ? response.text.trim() : '';
+      logger.info('TranscriptionRoutes', `Chunk ${chunkIndex} transcribed with Gemini: "${text.substring(0, 80)}..."`);
+    }
 
     // 4. Cleanup temp files
     try {

@@ -228,24 +228,29 @@ export function SettingsModule({
     department: profile?.department || 'Management'
   });
 
+  const [selectedAiProvider, setSelectedAiProvider] = useState<'openai' | 'gemini'>('openai');
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [testing, setTesting] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [geminiKeyInput, setGeminiKeyInput] = useState('');
   const [savingKey, setSavingKey] = useState(false);
 
-  const handleSaveOpenaiKey = async () => {
-    if (!apiKeyInput.trim()) {
-      toast.error('Please enter a valid AI API Key.');
+  const handleSaveAiKey = async () => {
+    const isOp = selectedAiProvider === 'openai';
+    const key = (isOp ? apiKeyInput : geminiKeyInput).trim();
+    if (!key) {
+      toast.error(`Please enter a valid ${isOp ? 'OpenAI' : 'Google Gemini'} API Key.`);
       return;
     }
     setSavingKey(true);
     try {
-      const url = getApiUrl('/api/gemini/save-key');
+      const endpoint = isOp ? '/api/openai/save-key' : '/api/gemini/save-key';
+      const url = getApiUrl(endpoint);
       const authHeaders = await getAuthHeaders();
       const res = await fetch(url, {
         method: 'POST',
         headers: authHeaders,
-        body: JSON.stringify({ apiKey: apiKeyInput.trim() })
+        body: JSON.stringify({ apiKey: key })
       });
 
       const text = await res.text();
@@ -255,23 +260,25 @@ export function SettingsModule({
       } catch (e) {}
 
       if (res.ok && data.success) {
-        toast.success('AI API Key saved successfully!');
-        setApiKeyInput('');
-        performDiagnostic();
+        toast.success(`${isOp ? 'OpenAI' : 'Google Gemini'} API Key saved successfully!`);
+        if (isOp) setApiKeyInput('');
+        else setGeminiKeyInput('');
+        performDiagnostic(selectedAiProvider);
       } else {
-        throw new Error(data.error || 'Failed to save AI API Key');
+        throw new Error(data.error || `Failed to save ${isOp ? 'OpenAI' : 'Google Gemini'} API Key`);
       }
     } catch (err: any) {
-      toast.error(err.message || 'Failed to save AI API key');
+      toast.error(err.message || 'Failed to save API key');
     } finally {
       setSavingKey(false);
     }
   };
 
-  const performDiagnostic = async () => {
+  const performDiagnostic = async (provider: 'openai' | 'gemini' = selectedAiProvider) => {
     setTesting(true);
     try {
-      const url = getApiUrl('/api/gemini-diagnostic');
+      const endpoint = provider === 'openai' ? '/api/openai-diagnostic' : '/api/gemini-diagnostic';
+      const url = getApiUrl(endpoint);
       const authHeaders = await getAuthHeaders();
       const response = await fetch(url, { headers: authHeaders });
       
@@ -285,9 +292,9 @@ export function SettingsModule({
 
       setDiagnostic(data);
       if (response.ok && data.success) {
-        toast.success("AI Key verification test succeeded!");
+        toast.success(`${provider === 'openai' ? 'OpenAI' : 'Google Gemini'} verification test succeeded!`);
       } else if (data.status) {
-        toast.error(`AI Key Test Status: ${data.status}`);
+        toast.error(`${provider === 'openai' ? 'OpenAI' : 'Google Gemini'} Test Status: ${data.status}`);
       } else {
         toast.error(data.error || `Diagnostic check failed (status ${response.status})`);
       }
@@ -299,7 +306,7 @@ export function SettingsModule({
   };
 
   useEffect(() => {
-    performDiagnostic();
+    performDiagnostic('openai');
   }, []);
 
   const [gdrive, setGdrive] = useState<{
@@ -630,70 +637,138 @@ export function SettingsModule({
 
           <Card className="shadow-md border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
             <CardHeader className="border-b border-slate-100 bg-white">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-900">
                     <Activity className="w-5 h-5 text-blue-600 animate-pulse" />
                     AI Engine Diagnostics & API Key
                   </CardTitle>
-                  <p className="text-xs text-slate-500 mt-0.5">Verify real-time connectivity, active model statuses, and configure your Gemini AI credentials.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Configure and test your OpenAI (Whisper & GPT-4o) or Google Gemini credentials.
+                  </p>
                 </div>
-                <Button 
-                  onClick={performDiagnostic} 
-                  disabled={testing}
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 px-4 h-9 shrink-0 shadow-xs"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${testing ? "animate-spin" : ""}`} />
-                  {testing ? "Testing..." : "Verify Now"}
-                </Button>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Provider Selector Tabs */}
+                  <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAiProvider('openai');
+                        performDiagnostic('openai');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg transition-all ${
+                        selectedAiProvider === 'openai'
+                          ? 'bg-white text-blue-600 shadow-xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      OpenAI (Whisper & ChatGPT)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAiProvider('gemini');
+                        performDiagnostic('gemini');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg transition-all ${
+                        selectedAiProvider === 'gemini'
+                          ? 'bg-white text-blue-600 shadow-xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Google Gemini
+                    </button>
+                  </div>
+
+                  <Button 
+                    onClick={() => performDiagnostic(selectedAiProvider)} 
+                    disabled={testing}
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 px-4 h-9 shrink-0 shadow-xs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${testing ? "animate-spin" : ""}`} />
+                    {testing ? "Testing..." : "Verify Now"}
+                  </Button>
+                </div>
               </div>
             </CardHeader>
 
             <CardContent className="p-6 space-y-6 bg-white">
-              {/* Gemini AI API Key Input */}
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
-                <Label className="text-xs font-bold text-slate-700 block">
-                  Google Gemini API Key
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="password"
-                    placeholder="AIzaSy... (Paste your Google Gemini API Key here)"
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    className="text-xs font-mono border-slate-200 bg-white rounded-xl flex-1"
-                  />
-                  <Button
-                    size="sm"
-                    disabled={savingKey}
-                    onClick={handleSaveOpenaiKey}
-                    className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl px-5 shrink-0"
-                  >
-                    {savingKey ? "Saving..." : "Save Key"}
-                  </Button>
-                </div>
-
-                {apiKeyInput.trim().startsWith('sk-') && (
-                  <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2 mt-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>
-                      Detected OpenAI key format (<code className="font-mono text-[11px] bg-amber-100 px-1 py-0.5 rounded">sk-...</code>). Arkoo AI engine runs on <strong>Google Gemini</strong>. Please use an API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="underline font-bold text-blue-600">Google AI Studio</a>.
+              {selectedAiProvider === 'openai' ? (
+                /* OpenAI API Key Input */
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-slate-700 block">
+                      OpenAI API Key (for Whisper Audio Transcription & GPT-4o MOM Analysis)
+                    </Label>
+                    <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                      Active AI Provider
                     </span>
                   </div>
-                )}
-
-                <p className="text-[11px] text-slate-400">
-                  Get your free Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">Google AI Studio</a> to power transcription, diarization, and MOM generation.
-                </p>
-              </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      placeholder="sk-... (Paste your OpenAI API Key here)"
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      className="text-xs font-mono border-slate-200 bg-white rounded-xl flex-1"
+                    />
+                    <Button
+                      size="sm"
+                      disabled={savingKey}
+                      onClick={handleSaveAiKey}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl px-5 shrink-0 shadow-sm"
+                    >
+                      {savingKey ? "Saving..." : "Save Key"}
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Get your secret key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">OpenAI Platform (platform.openai.com/api-keys)</a> to power high-fidelity Whisper transcription and GPT-4o task extraction.
+                  </p>
+                </div>
+              ) : (
+                /* Gemini API Key Input */
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-slate-700 block">
+                      Google Gemini API Key
+                    </Label>
+                    <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                      Alternative Engine
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      placeholder="AIzaSy... (Paste your Google Gemini API Key here)"
+                      value={geminiKeyInput}
+                      onChange={(e) => setGeminiKeyInput(e.target.value)}
+                      className="text-xs font-mono border-slate-200 bg-white rounded-xl flex-1"
+                    />
+                    <Button
+                      size="sm"
+                      disabled={savingKey}
+                      onClick={handleSaveAiKey}
+                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl px-5 shrink-0"
+                    >
+                      {savingKey ? "Saving..." : "Save Key"}
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Get your free Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">Google AI Studio</a>.
+                  </p>
+                </div>
+              )}
 
               {/* Connection Status Banner */}
               {testing ? (
                 <div className="flex items-center justify-center p-6 bg-slate-50 rounded-xl border border-slate-100 animate-pulse">
                   <div className="flex flex-col items-center gap-2">
                     <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
-                    <p className="text-xs font-semibold text-slate-600 font-sans">Testing Gemini AI API endpoint status...</p>
+                    <p className="text-xs font-semibold text-slate-600 font-sans">
+                      Testing {selectedAiProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} API endpoint status...
+                    </p>
                   </div>
                 </div>
               ) : diagnostic ? (
@@ -910,48 +985,6 @@ export function SettingsModule({
               </CardContent>
             </Card>
           )}
-
-
-          {/* OpenAI API Integration */}
-          <Card className="shadow-md border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50 mb-6">
-            <CardHeader className="border-b border-slate-100 bg-white">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-blue-500" />
-                    OpenAI API Integration (ChatGPT)
-                  </CardTitle>
-                  <p className="text-xs text-slate-500 mt-0.5">Configure OpenAI API for Audio Transcription and GPT-4o Minutes of Meeting Analysis.</p>
-                </div>
-                <div className="ml-auto">
-                  <span className={`px-3 py-1 text-xs font-bold rounded-full ${openaiData.connected ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-                    {openaiData.connected ? 'Active' : 'Not Configured'}
-                  </span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="flex gap-3 max-w-xl">
-                <Input 
-                  type="password"
-                  placeholder={openaiData.connected ? "•••••••••••••••• (Leave blank to keep current)" : "Enter OpenAI API Key (sk-...)"}
-                  value={openaiKeyInput}
-                  onChange={e => setOpenaiKeyInput(e.target.value)}
-                  className="bg-white font-mono"
-                />
-                <Button 
-                  onClick={handleSaveOpenaiIntegrationKey} 
-                  disabled={savingOpenai}
-                  className="bg-blue-600 hover:bg-blue-700 font-bold shrink-0 shadow-sm"
-                >
-                  {savingOpenai ? (
-                    <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
-                  ) : 'Save Key'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
 
           {/* Stakeholder Form Options */}
           <StakeholderOptionsEditor />
