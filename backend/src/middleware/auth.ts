@@ -61,14 +61,9 @@ export async function requireAdminOrWhitelisted(req: AuthenticatedRequest, res: 
     }
   }
 
-  // 2. In development or if whitelisted origin is calling, allow with audit log to avoid breaking frontend UI
-  const isAllowedOrigin = !origin || 
-    origin.includes('localhost') || 
-    origin.includes('127.0.0.1') || 
-    origin.endsWith('.pages.dev') || 
-    env.ALLOWED_ORIGINS.includes(origin);
-
-  if (isAllowedOrigin || env.NODE_ENV === 'development') {
+  // 2. In development mode only, allow unauthenticated access for local testing
+  if (env.NODE_ENV === 'development') {
+    logger.warn('AuthMiddleware', 'Dev-mode auth bypass active — no token required', { origin });
     return next();
   }
 

@@ -32,7 +32,7 @@ service cloud.firestore {
     // ─── 2. Employees & Stakeholders Collection ────────────────
     match /employees/{employeeId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
     }
 
     // ─── 3. Meetings Collection ───────────────────────────────
@@ -50,18 +50,20 @@ service cloud.firestore {
     // ─── 5. Roles & Permissions Collection ─────────────────────
     match /roles/{roleId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     // ─── 6. Recycle Bin Collection ────────────────────────────
     match /recycle_bin/{itemId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
     }
 
     // ─── Default Fallback ─────────────────────────────────────
+    // Read-only for authenticated users; writes require specific collection rules above
     match /{document=**} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if false;
     }
   }
 }

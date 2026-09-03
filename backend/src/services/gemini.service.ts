@@ -151,8 +151,7 @@ export async function transcribeWithGemini(fileBuffer: Buffer, mimeType: string,
   const ai = getGenAI();
   const chunkBase64 = fileBuffer.toString('base64');
 
-  const result = await ai.models.generateContent({
-    model: 'gemini-1.5-flash',
+  const result = await generateContentWithResilience(ai, {
     contents: [
       {
         role: 'user',
@@ -168,5 +167,5 @@ export async function transcribeWithGemini(fileBuffer: Buffer, mimeType: string,
       },
     ],
   });
-  return result.text.trim();
+  return (result.text || '').trim();
 }

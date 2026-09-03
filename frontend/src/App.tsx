@@ -63,8 +63,10 @@ export default function App() {
         try {
           const emailLower = String(user.email || '').trim().toLowerCase();
 
-          // 1. System Super Admin Check
-          const isSystemSuperAdmin = emailLower === 'admin@arkooprebuild.com' || emailLower === 'anushakanna19@gmail.com';
+          // 1. System Super Admin Check (configurable via env, fallback to defaults)
+          const superAdminEmails = (import.meta.env.VITE_SUPER_ADMIN_EMAILS || 'admin@arkooprebuild.com,anushakanna19@gmail.com')
+            .split(',').map((e: string) => e.trim().toLowerCase());
+          const isSystemSuperAdmin = superAdminEmails.includes(emailLower);
 
           if (isSystemSuperAdmin) {
             let savedName = user.displayName || 'System Admin';
@@ -148,7 +150,7 @@ export default function App() {
           const roleVal = String(matchedEmp.role || '').trim().toLowerCase();
 
           let userRole = 'employee';
-          if (emailLower === 'anushakanna19@gmail.com' || typeVal === 'admin' || (typeVal === '' && roleVal === 'admin') || roleVal === 'admin') {
+          if (superAdminEmails.includes(emailLower) || typeVal === 'admin' || (typeVal === '' && roleVal === 'admin') || roleVal === 'admin') {
             userRole = 'admin';
           } else if (typeVal === 'manager' || (typeVal === '' && roleVal === 'manager')) {
             userRole = 'manager';
