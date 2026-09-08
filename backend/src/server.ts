@@ -42,6 +42,13 @@ app.use(routes);
 // ─── Global Error Handler ──────────────────────────────────
 app.use(errorHandler);
 
+import { syncCloudinarySettingsFromFirestore } from './services/cloudinary.service.js';
+import { syncOpenaiSettingsFromFirestore } from './services/openai.service.js';
+
+// Sync cloud settings from Firestore on startup
+syncCloudinarySettingsFromFirestore().catch(() => {});
+syncOpenaiSettingsFromFirestore().catch(() => {});
+
 // ─── Start Server ──────────────────────────────────────────
 const PORT = env.PORT;
 app.listen(PORT, '0.0.0.0', () => {

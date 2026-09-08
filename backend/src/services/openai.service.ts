@@ -6,14 +6,42 @@ import { logger } from '../utils/logger.js';
 
 let openaiClient: OpenAI | null = null;
 let lastUsedApiKey = '';
+let cachedOpenaiSettings: any = null;
 
 // ─── Settings Persistence ──────────────────────────────────
+export async function syncOpenaiSettingsFromFirestore(): Promise<void> {
+  const dbFirestore = getFirestore();
+  if (!dbFirestore) return;
+  try {
+    const doc = await dbFirestore.collection('settings').doc('openai').get();
+    if (doc.exists) {
+      const data = doc.data();
+      if (data && data.apiKey) {
+        cachedOpenaiSettings = data;
+        process.env.OPENAI_API_KEY = data.apiKey;
+        try {
+          fs.writeFileSync(OPENAI_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf8');
+        } catch (_wErr) {}
+        logger.info('OpenaiService', 'Synced OpenAI settings from Firestore successfully');
+      }
+    }
+  } catch (err) {
+    logger.warn('OpenaiService', 'Could not sync OpenAI settings from Firestore', err);
+  }
+}
+
 export function loadOpenaiSettings(): any {
+  if (cachedOpenaiSettings && cachedOpenaiSettings.apiKey) {
+    return cachedOpenaiSettings;
+  }
   try {
     if (fs.existsSync(OPENAI_SETTINGS_FILE)) {
       const content = fs.readFileSync(OPENAI_SETTINGS_FILE, 'utf8');
       const parsed = JSON.parse(content);
-      if (parsed && parsed.apiKey) return parsed;
+      if (parsed && parsed.apiKey) {
+        cachedOpenaiSettings = parsed;
+        return parsed;
+      }
     }
   } catch (err) {
     logger.error('OpenaiService', 'Failed to read openai settings', err);
@@ -25,6 +53,7 @@ export function loadOpenaiSettings(): any {
 }
 
 export function saveOpenaiSettings(data: { apiKey: string; updatedAt?: string }): void {
+  cachedOpenaiSettings = data;
   try {
     fs.writeFileSync(OPENAI_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf8');
     logger.info('OpenaiService', `Saved OpenAI settings to ${OPENAI_SETTINGS_FILE}`);

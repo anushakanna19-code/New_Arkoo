@@ -1,14 +1,43 @@
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import { env, CLOUDINARY_SETTINGS_FILE } from '../config/env.js';
+import { getFirestore } from '../config/firebase.js';
 import { logger } from '../utils/logger.js';
 
 // ─── Cloudinary Service ────────────────────────────────────
+let cachedCloudinarySettings: any = null;
+
+export async function syncCloudinarySettingsFromFirestore(): Promise<void> {
+  const db = getFirestore();
+  if (!db) return;
+  try {
+    const doc = await db.collection('settings').doc('cloudinary').get();
+    if (doc.exists) {
+      const data = doc.data();
+      if (data && (data.cloudName || data.apiKey)) {
+        cachedCloudinarySettings = data;
+        try {
+          fs.writeFileSync(CLOUDINARY_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf8');
+        } catch (_wErr) {}
+        logger.info('CloudinaryService', 'Synced settings from Firestore successfully');
+      }
+    }
+  } catch (err) {
+    logger.warn('CloudinaryService', 'Could not sync settings from Firestore', err);
+  }
+}
 
 export function loadCloudinarySettings(): any {
+  if (cachedCloudinarySettings && cachedCloudinarySettings.cloudName) {
+    return cachedCloudinarySettings;
+  }
   try {
     if (fs.existsSync(CLOUDINARY_SETTINGS_FILE)) {
-      return JSON.parse(fs.readFileSync(CLOUDINARY_SETTINGS_FILE, 'utf8'));
+      const content = JSON.parse(fs.readFileSync(CLOUDINARY_SETTINGS_FILE, 'utf8'));
+      if (content && (content.cloudName || content.apiKey)) {
+        cachedCloudinarySettings = content;
+        return content;
+      }
     }
   } catch (err) {
     logger.error('CloudinaryService', 'Failed to read settings', err);
@@ -17,6 +46,7 @@ export function loadCloudinarySettings(): any {
 }
 
 export function saveCloudinarySettings(data: any): void {
+  cachedCloudinarySettings = data;
   try {
     fs.writeFileSync(CLOUDINARY_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf8');
     logger.info('CloudinaryService', `Saved settings to ${CLOUDINARY_SETTINGS_FILE}`);
