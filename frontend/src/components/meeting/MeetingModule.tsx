@@ -615,6 +615,7 @@ export function MeetingModule({
                   await updateDoc(doc(db, 'meetings', meetingRefId), {
                     driveFileId: driveResult.id,
                     driveFileUrl: driveResult.webViewLink,
+                    backupDriveFileUrl: driveResult.webViewLink,
                     gdriveUploadStatus: 'completed'
                   });
                   console.log('[Background Drive] Drive backup sync finished:', driveResult.webViewLink);
@@ -675,6 +676,10 @@ export function MeetingModule({
           let finalData: any = null;
           let isSavedByServer = false;
           let streamError: string | null = null;
+          let serverAudioUrl = '';
+          let serverDriveUrl = '';
+          let serverDriveId = '';
+          let serverBackupDriveUrl = '';
 
           if (!readerStream) {
             throw new Error("Unable to establish processing stream connection.");
@@ -698,8 +703,12 @@ export function MeetingModule({
                   if (payload.label) {
                     setProgressLabel(payload.label);
                   }
-                  if (payload.status === 'completed' && payload.data) {
-                    finalData = payload.data;
+                  if (payload.status === 'completed') {
+                    if (payload.data) finalData = payload.data;
+                    if (payload.audioUrl) serverAudioUrl = payload.audioUrl;
+                    if (payload.driveFileUrl) serverDriveUrl = payload.driveFileUrl;
+                    if (payload.driveFileId) serverDriveId = payload.driveFileId;
+                    if (payload.backupDriveFileUrl) serverBackupDriveUrl = payload.backupDriveFileUrl;
                   }
                   if (payload.isSavedByServer !== undefined) {
                     isSavedByServer = payload.isSavedByServer;
@@ -720,8 +729,12 @@ export function MeetingModule({
           if (buffer.trim()) {
             try {
               const payload = JSON.parse(buffer);
-              if (payload.status === 'completed' && payload.data) {
-                finalData = payload.data;
+              if (payload.status === 'completed') {
+                if (payload.data) finalData = payload.data;
+                if (payload.audioUrl) serverAudioUrl = payload.audioUrl;
+                if (payload.driveFileUrl) serverDriveUrl = payload.driveFileUrl;
+                if (payload.driveFileId) serverDriveId = payload.driveFileId;
+                if (payload.backupDriveFileUrl) serverBackupDriveUrl = payload.backupDriveFileUrl;
               }
               if (payload.isSavedByServer !== undefined) {
                 isSavedByServer = payload.isSavedByServer;
@@ -744,6 +757,13 @@ export function MeetingModule({
 
           console.log('AI Data received:', finalData, 'Saved by server:', isSavedByServer);
 
+          const resolvedAudioUrl = (serverAudioUrl && serverAudioUrl.startsWith('http')) 
+            ? serverAudioUrl 
+            : ((audioUrl && audioUrl.startsWith('http')) ? audioUrl : `/api/audio/${meetingRefId}`);
+          const resolvedDriveUrl = serverDriveUrl || driveFileUrl || serverBackupDriveUrl || null;
+          const resolvedDriveId = serverDriveId || driveFileId || null;
+          const resolvedBackupDriveUrl = serverBackupDriveUrl || serverDriveUrl || driveFileUrl || null;
+
           if (!isSavedByServer) {
             console.log("Saving results from client fallback as fallback...");
             // 4. Update Firestore with results
@@ -755,7 +775,10 @@ export function MeetingModule({
               transcript: finalData.transcript || "Transcription could not be generated.",
               mom: finalData.mom || "MOM could not be generated.",
               summary: finalData.summary || "Summary could not be generated.",
-              audioUrl: audioUrl || `/api/audio/${meetingRefId}`,
+              audioUrl: resolvedAudioUrl,
+              driveFileUrl: resolvedDriveUrl,
+              driveFileId: resolvedDriveId,
+              backupDriveFileUrl: resolvedBackupDriveUrl,
               processedAt: serverTimestamp(),
             });
 
@@ -809,7 +832,15 @@ export function MeetingModule({
               tasksCount: tasks.length
             });
           } else {
-             console.log("Saved directly by backend pipeline server. Skipping client-side database writes.");
+            console.log("Saved directly by backend pipeline server. Skipping client-side database writes.");
+            if (resolvedAudioUrl && resolvedAudioUrl.startsWith('http')) {
+              updateDoc(doc(db, 'meetings', meetingRefId), {
+                audioUrl: resolvedAudioUrl,
+                ...(resolvedDriveUrl ? { driveFileUrl: resolvedDriveUrl } : {}),
+                ...(resolvedDriveId ? { driveFileId: resolvedDriveId } : {}),
+                ...(resolvedBackupDriveUrl ? { backupDriveFileUrl: resolvedBackupDriveUrl } : {})
+              }).catch(() => {});
+            }
           }
 
           setProcessingId(null);

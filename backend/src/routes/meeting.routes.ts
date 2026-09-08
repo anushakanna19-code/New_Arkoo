@@ -443,7 +443,15 @@ router.post('/process-meeting', async (req, res) => {
     }
 
     sendProgress(100, 'Analysis completed!');
-    res.write(JSON.stringify({ status: 'completed', data: result, isSavedByServer }) + '\n');
+    res.write(JSON.stringify({ 
+      status: 'completed', 
+      data: result, 
+      isSavedByServer,
+      audioUrl: finalAudioUrl,
+      driveFileUrl: backupDriveFileUrl || driveFileUrl,
+      driveFileId: driveFileId,
+      backupDriveFileUrl: backupDriveFileUrl,
+    }) + '\n');
     res.end();
   } catch (error: any) {
     logger.error('MeetingRoutes', 'Critical process-meeting failure', error);

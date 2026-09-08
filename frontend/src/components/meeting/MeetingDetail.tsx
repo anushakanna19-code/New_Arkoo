@@ -2,7 +2,7 @@
 // Extracted from MeetingModule.tsx — zero behavior changes.
 // The full meeting detail view with MOM, transcript, audio, tasks, AI chat.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   collection,
   updateDoc,
@@ -52,6 +52,10 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
   useEffect(() => {
     setCurrentMeeting(meeting);
   }, [meeting]);
+
+  const effectiveDriveUrl = useMemo(() => {
+    return currentMeeting?.driveFileUrl || currentMeeting?.backupDriveFileUrl || currentMeeting?.driveUrl || currentMeeting?.gdriveUrl || null;
+  }, [currentMeeting]);
 
   const handleRegenerateMom = async () => {
     if (isRegeneratingMom) return;
@@ -135,11 +139,16 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
     setRetryingUpload(true);
     const retryToast = toast.loading("Initiating secure backup upload retry to Google Drive...");
     try {
-      const res = await fetch(getApiUrl(`/api/meetings/${currentMeeting.id}/retry-drive-upload`), {
+      let res = await fetch(getApiUrl(`/api/gdrive/retry-upload/${currentMeeting.id}`), {
         method: 'POST'
       });
       if (!res.ok) {
-        const data = await res.json();
+        res = await fetch(getApiUrl(`/api/meetings/${currentMeeting.id}/retry-drive-upload`), {
+          method: 'POST'
+        });
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to retry upload.");
       }
       const data = await res.json();
@@ -150,6 +159,7 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
         gdriveUploadStatus: 'completed',
         driveFileId: data.driveFileId,
         driveFileUrl: data.driveFileUrl,
+        backupDriveFileUrl: data.driveFileUrl,
       }));
     } catch (err: any) {
       toast.error(`Retry upload failed: ${err.message}`, { id: retryToast });
@@ -764,22 +774,6 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
                     </div>
                   ))}
                 </div>
-
-                {/* Meeting Recording — embedded inside Discussion Points */}
-                {(currentMeeting.audioUrl || currentMeeting.driveFileUrl) && (
-                  <div className="mt-4 border-t border-slate-100 pt-4">
-                    <div className="flex items-center gap-2 text-slate-700 font-semibold text-xs mb-3">
-                      <span className="text-sm">🎙️</span>
-                      <span className="uppercase tracking-wider">Meeting Recording</span>
-                    </div>
-                    <MeetingAudioPlayer 
-                      audioUrl={currentMeeting.audioUrl} 
-                      driveFileUrl={currentMeeting.driveFileUrl}
-                      title={currentMeeting.title} 
-                      meetingId={currentMeeting.id} 
-                    />
-                  </div>
-                )}
               </div>
             )}
 
@@ -874,11 +868,11 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
             </div>
           )}
 
-          {/* Meeting Audio Player — shown standalone only when no discussionPoints exist */}
-          {(currentMeeting.audioUrl || currentMeeting.driveFileUrl || currentMeeting.backupDriveFileUrl) && discussionPoints.length === 0 && (
+          {/* Meeting Audio Player */}
+          {(currentMeeting.audioUrl || effectiveDriveUrl) && (
             <MeetingAudioPlayer 
               audioUrl={currentMeeting.audioUrl} 
-              driveFileUrl={currentMeeting.driveFileUrl || currentMeeting.backupDriveFileUrl}
+              driveFileUrl={effectiveDriveUrl}
               title={currentMeeting.title} 
               meetingId={currentMeeting.id} 
             />
@@ -914,9 +908,9 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
               )}
             </Button>
 
-            {currentMeeting.driveFileUrl && (
+            {effectiveDriveUrl && (
               <a 
-                href={currentMeeting.driveFileUrl} 
+                href={effectiveDriveUrl} 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="w-full flex items-center justify-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold uppercase text-[10px] tracking-widest rounded-xl h-10 transition cursor-pointer text-center"
