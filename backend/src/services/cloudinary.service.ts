@@ -22,8 +22,8 @@ export async function syncCloudinarySettingsFromFirestore(): Promise<void> {
         logger.info('CloudinaryService', 'Synced settings from Firestore successfully');
       }
     }
-  } catch (err) {
-    logger.warn('CloudinaryService', 'Could not sync settings from Firestore', err);
+  } catch (err: any) {
+    logger.warn('CloudinaryService', 'Could not sync settings from Firestore', { error: err?.message || String(err) });
   }
 }
 

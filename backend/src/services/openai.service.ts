@@ -25,8 +25,8 @@ export async function syncOpenaiSettingsFromFirestore(): Promise<void> {
         logger.info('OpenaiService', 'Synced OpenAI settings from Firestore successfully');
       }
     }
-  } catch (err) {
-    logger.warn('OpenaiService', 'Could not sync OpenAI settings from Firestore', err);
+  } catch (err: any) {
+    logger.warn('OpenaiService', 'Could not sync OpenAI settings from Firestore', { error: err?.message || String(err) });
   }
 }
 
