@@ -1,13 +1,20 @@
-// ─── Meeting Audio Player Component ─────────────────────────
-// Extracted from MeetingModule.tsx — zero behavior changes.
-// Handles playback from IndexedDB cache, Firebase Storage, or Google Drive.
-
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Play, Square, Download } from 'lucide-react';
+import { Play, Square, Download, Loader2, ExternalLink } from 'lucide-react';
+import { toast } from 'sonner';
 import { getApiUrl } from '@/lib/api';
 import { getAudioFromLocalCache } from '@/lib/audio-cache';
 
-export function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: string; title: string; meetingId?: string }) {
+export function MeetingAudioPlayer({ 
+  audioUrl, 
+  driveFileUrl,
+  title, 
+  meetingId 
+}: { 
+  audioUrl?: string; 
+  driveFileUrl?: string;
+  title: string; 
+  meetingId?: string;
+}) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -15,10 +22,11 @@ export function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: s
   const [volume, setVolume] = useState(1);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
   const [checkingCache, setCheckingCache] = useState(true);
 
-  // Check if locally cached audio exists in browser IndexedDB for this meeting
+  // Check locally cached audio in IndexedDB
   useEffect(() => {
     let active = true;
     if (meetingId) {
@@ -39,6 +47,7 @@ export function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: s
     } else {
       setCheckingCache(false);
     }
+
     return () => {
       active = false;
       if (localBlobUrl) {
@@ -54,14 +63,17 @@ export function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: s
     return getApiUrl(audioUrl);
   }, [localBlobUrl, checkingCache, audioUrl]);
 
-  useEffect(() => {
-    if (effectiveAudioUrl) {
-      setHasError(false);
-      setIsLoaded(false);
+  const effectiveDriveUrl = useMemo(() => {
+    if (driveFileUrl && (driveFileUrl.includes('drive.google.com') || driveFileUrl.includes('googleapis.com/drive'))) {
+      return driveFileUrl;
     }
-  }, [effectiveAudioUrl]);
+    if (audioUrl && (audioUrl.includes('drive.google.com') || audioUrl.includes('googleapis.com/drive'))) {
+      return audioUrl;
+    }
+    return null;
+  }, [driveFileUrl, audioUrl]);
 
-  const isDriveUrl = !localBlobUrl && (audioUrl?.includes('drive.google.com') || audioUrl?.includes('googleapis.com/drive'));
+  const isDriveOnly = !localBlobUrl && effectiveDriveUrl && (!audioUrl || audioUrl.includes('drive.google.com') || audioUrl.startsWith('/api/audio/'));
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -107,6 +119,83 @@ export function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: s
 
   const handleEnded = () => setIsPlaying(false);
 
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isDriveOnly) {
+      window.open(effectiveDriveUrl || audioUrl, '_blank');
+      return;
+    }
+
+    if (!effectiveAudioUrl && !audioUrl) {
+      toast.error('No audio file is available for this session.');
+      return;
+    }
+
+    if (hasError && !localBlobUrl) {
+      if (effectiveDriveUrl) {
+        window.open(effectiveDriveUrl, '_blank');
+        return;
+      }
+      toast.error('Audio recording is unavailable for this previous session.');
+      return;
+    }
+
+    const targetUrl = effectiveAudioUrl || getApiUrl(audioUrl || '');
+    const safeTitle = (title || 'meeting').replace(/[/\\?%*:|"<>]/g, '_').trim();
+
+    try {
+      setIsDownloading(true);
+
+      // If it's already a blob URL, trigger instant direct download
+      if (targetUrl.startsWith('blob:')) {
+        const a = document.createElement('a');
+        a.href = targetUrl;
+        a.download = `${safeTitle}_recording.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      }
+
+      // Fetch file as blob to force browser download dialog and set proper filename
+      const response = await fetch(targetUrl);
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Recording file not found on server.');
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+
+      let ext = 'webm';
+      if (blob.type.includes('mpeg') || blob.type.includes('mp3')) ext = 'mp3';
+      else if (blob.type.includes('wav')) ext = 'wav';
+      else if (blob.type.includes('m4a')) ext = 'm4a';
+      else if (targetUrl.includes('.mp3')) ext = 'mp3';
+      else if (targetUrl.includes('.wav')) ext = 'wav';
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${safeTitle}_recording.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+      toast.success('Audio downloaded successfully!');
+    } catch (err: any) {
+      console.warn('[MeetingAudioPlayer] Direct download fetch failed:', err);
+      if (effectiveDriveUrl) {
+        toast.info('Opening recording backup on Google Drive...');
+        window.open(effectiveDriveUrl, '_blank');
+      } else {
+        toast.error(err.message || 'Audio recording unavailable for this previous session.');
+      }
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const fmt = (s: number) => {
     if (!isFinite(s) || isNaN(s)) return '0:00';
     const m = Math.floor(s / 60);
@@ -133,7 +222,7 @@ export function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: s
         )}
       </div>
 
-      {isDriveUrl ? (
+      {isDriveOnly ? (
         /* Drive file — cannot stream directly, show open link */
         <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex flex-col items-center gap-3 text-center">
           <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-2xl">🎵</div>
@@ -142,39 +231,41 @@ export function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: s
             Click below to open and play it directly in Drive.
           </p>
           <a
-            href={audioUrl}
+            href={effectiveDriveUrl || audioUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
           >
-            <Play className="w-3.5 h-3.5" /> Open in Google Drive
+            <Play className="w-3.5 h-3.5" /> Open in Google Drive <ExternalLink className="w-3.5 h-3.5 ml-1" />
           </a>
         </div>
       ) : (
         /* Local / Cloud audio — stream inline */
         <div className="space-y-4">
           {/* Hidden native audio element */}
-          <audio
-            ref={audioRef}
-            src={effectiveAudioUrl}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onDurationChange={handleLoadedMetadata}
-            onCanPlay={handleLoadedMetadata}
-            onEnded={handleEnded}
-            onError={(e) => {
-              console.warn('[Audio Player] Audio load error for', effectiveAudioUrl, e);
-              setHasError(true);
-            }}
-            preload="auto"
-          />
+          {effectiveAudioUrl ? (
+            <audio
+              ref={audioRef}
+              src={effectiveAudioUrl}
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onDurationChange={handleLoadedMetadata}
+              onCanPlay={handleLoadedMetadata}
+              onEnded={handleEnded}
+              onError={(e) => {
+                console.warn('[Audio Player] Audio load error for', effectiveAudioUrl, e);
+                setHasError(true);
+              }}
+              preload="auto"
+            />
+          ) : null}
 
           {/* Waveform visual placeholder + play button */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-4 flex items-center gap-4">
             {/* Play / Pause button */}
             <button
               onClick={togglePlay}
-              className="w-11 h-11 rounded-full bg-blue-500 hover:bg-blue-700 flex items-center justify-center text-white shadow-lg transition-all active:scale-95 shrink-0"
+              className="w-11 h-11 rounded-full bg-blue-500 hover:bg-blue-700 flex items-center justify-center text-white shadow-lg transition-all active:scale-95 shrink-0 cursor-pointer"
             >
               {isPlaying ? (
                 <Square className="w-4 h-4 fill-white" />
@@ -250,15 +341,21 @@ export function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: s
             </div>
 
             {/* Download */}
-            <a
-              href={effectiveAudioUrl}
-              download={`${title || 'meeting'}_recording.webm`}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-700 transition-colors"
+            <button
+              onClick={handleDownload}
+              disabled={isDownloading || (!effectiveAudioUrl && !audioUrl)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-700 disabled:opacity-50 transition-colors cursor-pointer bg-transparent border-none p-0"
             >
-              <Download className="w-3.5 h-3.5" /> Download Audio
-            </a>
+              {isDownloading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" /> Downloading...
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" /> Download Audio
+                </>
+              )}
+            </button>
           </div>
 
           {!isLoaded && !hasError && (
@@ -268,13 +365,25 @@ export function MeetingAudioPlayer({ audioUrl, title, meetingId }: { audioUrl: s
           )}
 
           {hasError && (
-            <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-center space-y-1 mt-2">
+            <div className="p-4 bg-amber-50/80 rounded-xl border border-amber-200 text-center space-y-2 mt-2">
               <p className="text-xs font-bold text-amber-800">
-                Recording audio unavailable for this earlier session
+                Recording audio stream unavailable on local server
               </p>
               <p className="text-[11px] text-amber-700 leading-relaxed">
-                This meeting was recorded before cloud storage was activated. Start a new meeting recording to test high-definition audio playback and downloads.
+                This meeting was created in an earlier session before cloud storage was activated, and the temporary local server cache has expired.
               </p>
+              {effectiveDriveUrl && (
+                <div className="pt-1">
+                  <a
+                    href={effectiveDriveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-xs"
+                  >
+                    🎵 Open Backup in Google Drive <ExternalLink className="w-3 h-3 ml-0.5" />
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>

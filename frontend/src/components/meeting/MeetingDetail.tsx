@@ -679,14 +679,19 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
                   ))}
                 </div>
 
-                {/* Meeting Recording for A — embedded inside Discussion Points */}
-                {currentMeeting.audioUrl && (
+                {/* Meeting Recording — embedded inside Discussion Points */}
+                {(currentMeeting.audioUrl || currentMeeting.driveFileUrl) && (
                   <div className="mt-4 border-t border-slate-100 pt-4">
                     <div className="flex items-center gap-2 text-slate-700 font-semibold text-xs mb-3">
                       <span className="text-sm">🎙️</span>
-                      <span className="uppercase tracking-wider">Meeting Recording for A</span>
+                      <span className="uppercase tracking-wider">Meeting Recording</span>
                     </div>
-                    <MeetingAudioPlayer audioUrl={currentMeeting.audioUrl} title={currentMeeting.title} meetingId={currentMeeting.id} />
+                    <MeetingAudioPlayer 
+                      audioUrl={currentMeeting.audioUrl} 
+                      driveFileUrl={currentMeeting.driveFileUrl}
+                      title={currentMeeting.title} 
+                      meetingId={currentMeeting.id} 
+                    />
                   </div>
                 )}
               </div>
@@ -784,8 +789,13 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
           )}
 
           {/* Meeting Audio Player — shown standalone only when no discussionPoints exist */}
-          {currentMeeting.audioUrl && discussionPoints.length === 0 && (
-            <MeetingAudioPlayer audioUrl={currentMeeting.audioUrl} title={currentMeeting.title} meetingId={currentMeeting.id} />
+          {(currentMeeting.audioUrl || currentMeeting.driveFileUrl) && discussionPoints.length === 0 && (
+            <MeetingAudioPlayer 
+              audioUrl={currentMeeting.audioUrl} 
+              driveFileUrl={currentMeeting.driveFileUrl}
+              title={currentMeeting.title} 
+              meetingId={currentMeeting.id} 
+            />
           )}
         </div>
 

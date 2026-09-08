@@ -4,6 +4,8 @@ import path from 'path';
 import { getGenAI, generateContentWithResilience } from '../services/gemini.service.js';
 import { getOpenaiApiKey, transcribeWithOpenai } from '../services/openai.service.js';
 import { UPLOADS_DIR } from '../config/env.js';
+import { getFirestore } from '../config/firebase.js';
+import { getCloudinaryAudioUrl } from '../services/cloudinary.service.js';
 import { transcodeToWav } from '../utils/safe-exec.js';
 import { logger } from '../utils/logger.js';
 
@@ -152,7 +154,7 @@ router.post('/tasks/voice-note', async (req, res) => {
 });
 
 // ─── Serve Audio Files ─────────────────────────────────────
-router.get('/audio/:meetingId', (req, res) => {
+router.get('/audio/:meetingId', async (req, res) => {
   const { meetingId } = req.params;
   try {
     const safeMeetingId = (meetingId || '').toString().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -173,14 +175,46 @@ router.get('/audio/:meetingId', (req, res) => {
       return res.sendFile(convertedMp3Path);
     }
 
-    const files = fs.readdirSync(UPLOADS_DIR);
-    const rawFile = files.find(f => f.startsWith(`${safeMeetingId}_input.`));
-    if (rawFile) {
-      const rawPath = path.join(UPLOADS_DIR, rawFile);
-      const ext = path.extname(rawFile).substring(1);
-      const mime = ext === 'm4a' ? 'audio/m4a' : ext === 'mp3' ? 'audio/mpeg' : ext === 'wav' ? 'audio/wav' : 'audio/webm';
-      res.setHeader('Content-Type', mime);
-      return res.sendFile(rawPath);
+    if (fs.existsSync(UPLOADS_DIR)) {
+      const files = fs.readdirSync(UPLOADS_DIR);
+      const rawFile = files.find(f => f.startsWith(`${safeMeetingId}_input.`));
+      if (rawFile) {
+        const rawPath = path.join(UPLOADS_DIR, rawFile);
+        const ext = path.extname(rawFile).substring(1);
+        const mime = ext === 'm4a' ? 'audio/m4a' : ext === 'mp3' ? 'audio/mpeg' : ext === 'wav' ? 'audio/wav' : 'audio/webm';
+        res.setHeader('Content-Type', mime);
+        return res.sendFile(rawPath);
+      }
+    }
+
+    // 2. Check Cloudinary server for the recording
+    try {
+      const cloudUrl = await getCloudinaryAudioUrl(safeMeetingId);
+      if (cloudUrl) {
+        logger.info('TranscriptionRoutes', `Serving audio via Cloudinary URL: ${cloudUrl}`);
+        const db = getFirestore();
+        if (db) {
+          db.collection('meetings').doc(safeMeetingId).update({ audioUrl: cloudUrl }).catch(() => {});
+        }
+        return res.redirect(cloudUrl);
+      }
+    } catch (cloudErr: any) {
+      logger.warn('TranscriptionRoutes', 'Cloudinary audio lookup warning', { error: cloudErr?.message || String(cloudErr) });
+    }
+
+    // 3. Fallback: Check Firestore for external cloud audio URLs (Firebase Storage, Cloudinary, Drive)
+    const db = getFirestore();
+    if (db) {
+      try {
+        const snap = await db.collection('meetings').doc(safeMeetingId).get();
+        if (snap.exists) {
+          const data = snap.data();
+          const targetUrl = data?.audioUrl || data?.driveFileUrl || data?.backupDriveFileUrl;
+          if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+            return res.redirect(targetUrl);
+          }
+        }
+      } catch (_e) {}
     }
 
     res.status(404).json({ error: 'Audio recording not found' });

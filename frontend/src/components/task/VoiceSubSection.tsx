@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { getApiUrl } from '@/lib/api';
 
 export function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: string; profile: any; onLogActivity: (m: string) => void }) {
   const [voiceNotes, setVoiceNotes] = useState<any[]>([]);
@@ -111,7 +112,7 @@ export function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: st
         const base64data = String(reader.result).split(',')[1];
 
         // Call server transcribing Proxy route
-        const resp = await fetch('/api/tasks/voice-note', {
+        const resp = await fetch(getApiUrl('/api/tasks/voice-note'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -190,7 +191,7 @@ export function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: st
       reader.onloadend = async () => {
         const base64data = String(reader.result).split(',')[1];
 
-        const resp = await fetch('/api/tasks/voice-note', {
+        const resp = await fetch(getApiUrl('/api/tasks/voice-note'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -330,7 +331,7 @@ export function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: st
 
               {/* Playback player */}
               <div className="bg-slate-50 p-2 rounded-xl border border-slate-100/50">
-                <audio src={item.audioUrl} controls className="w-full h-8 max-w-full text-slate-700" />
+                <audio src={getApiUrl(item.audioUrl)} controls className="w-full h-8 max-w-full text-slate-700" />
               </div>
 
               {/* Transcript block */}

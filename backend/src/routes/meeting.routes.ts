@@ -201,19 +201,21 @@ router.post('/process-meeting', async (req, res) => {
       const rawInputPath = path.join(UPLOADS_DIR, `${safeMeetingId}_input.${rawExtension}`);
       fs.writeFileSync(rawInputPath, Buffer.from(audioBase64, 'base64'));
 
-      if (!hasPreTranscribedText) {
-        sendProgress(20, 'Converting audio format...');
-        const convertedWavPath = path.join(UPLOADS_DIR, `${safeMeetingId}_converted.wav`);
-        try {
-          await transcodeToWav(rawInputPath, convertedWavPath);
+      const convertedWavPath = path.join(UPLOADS_DIR, `${safeMeetingId}_converted.wav`);
+      try {
+        await transcodeToWav(rawInputPath, convertedWavPath);
+        if (fs.existsSync(convertedWavPath)) {
           finalAudioBase64 = fs.readFileSync(convertedWavPath).toString('base64');
           finalAudioMime = 'audio/wav';
-          finalAudioUrl = `/api/audio/${safeMeetingId}`;
-          sendProgress(30, 'Audio converted successfully.');
-        } catch {
-          logger.warn('MeetingRoutes', 'Audio transcode failed, using raw');
-          sendProgress(30, 'Using raw recording...');
         }
+      } catch {
+        logger.warn('MeetingRoutes', 'Audio transcode failed, using raw');
+      }
+
+      finalAudioUrl = audioUrl || `/api/audio/${safeMeetingId}`;
+
+      if (!hasPreTranscribedText) {
+        sendProgress(20, 'Audio converted successfully.');
       } else {
         sendProgress(25, 'Processing with cached transcription...');
       }
@@ -301,7 +303,10 @@ router.post('/process-meeting', async (req, res) => {
       try {
         sendProgress(48, 'Uploading to Cloudinary CDN...');
         const cloudResult = await uploadAudioToCloudinary(fileContentBuffer, `recording_${meetingId || Date.now()}`);
-        if (cloudResult?.url) backupDriveFileUrl = cloudResult.url;
+        if (cloudResult?.url) {
+          backupDriveFileUrl = cloudResult.url;
+          finalAudioUrl = cloudResult.url;
+        }
       } catch (cloudErr: any) {
         logger.warn('MeetingRoutes', 'Cloudinary upload fallback', { error: cloudErr.message });
       }

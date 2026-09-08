@@ -73,3 +73,60 @@ export async function uploadAudioToCloudinary(
     return null;
   }
 }
+
+export async function getCloudinaryAudioUrl(meetingId: string): Promise<string | null> {
+  const localSettings = loadCloudinarySettings() || {};
+  const cloudName = env.CLOUDINARY_CLOUD_NAME || localSettings.cloudName || '';
+  const apiKey = env.CLOUDINARY_API_KEY || localSettings.apiKey || '';
+  const apiSecret = env.CLOUDINARY_API_SECRET || localSettings.apiSecret || '';
+
+  if (!cloudName) {
+    return null;
+  }
+
+  try {
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey || undefined,
+      api_secret: apiSecret || undefined,
+      secure: true,
+    });
+
+    const safeId = (meetingId || '').toString().replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeId) return null;
+
+    // If API credentials are present, query Cloudinary Admin API for the exact resource
+    if (apiKey && apiSecret) {
+      const candidates = [
+        `arkoo_recordings/recording_${safeId}`,
+        `recording_${safeId}`,
+        `arkoo_recordings/${safeId}`,
+        safeId,
+      ];
+
+      for (const pid of candidates) {
+        for (const rType of ['video', 'raw', 'image'] as const) {
+          try {
+            const res = await cloudinary.api.resource(pid, { resource_type: rType });
+            if (res?.secure_url) {
+              logger.info('CloudinaryService', `Found Cloudinary resource: ${res.secure_url}`);
+              return res.secure_url;
+            }
+          } catch {
+            // continue checking
+          }
+        }
+      }
+    }
+
+    // Fallback: Generate Cloudinary secure delivery URL
+    const generatedUrl = cloudinary.url(`arkoo_recordings/recording_${safeId}`, {
+      resource_type: 'video',
+      secure: true,
+    });
+    return generatedUrl;
+  } catch (err) {
+    logger.error('CloudinaryService', 'Error getting Cloudinary audio URL', err);
+    return null;
+  }
+}

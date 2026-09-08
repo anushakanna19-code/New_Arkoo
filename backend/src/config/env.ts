@@ -18,18 +18,29 @@ dotenv.config({ path: path.join(process.cwd(), 'backend', '.env'), override: tru
 dotenv.config({ override: true });
 
 // ─── Directory Resolution ──────────────────────────────────
-export const BACKEND_DIR = fs.existsSync(path.join(__dirnameResolved, '..'))
-  ? path.resolve(__dirnameResolved, '..')
-  : path.join(process.cwd(), 'backend');
+export const BACKEND_DIR = (() => {
+  const current = path.resolve(__dirnameResolved);
+  // If running from src/config or dist/config, step up to backend root
+  if (current.endsWith(path.join('src', 'config')) || current.endsWith(path.join('dist', 'config'))) {
+    return path.resolve(current, '..', '..');
+  }
+  if (current.endsWith('config')) {
+    const parent = path.resolve(current, '..');
+    if (parent.endsWith('src') || parent.endsWith('dist')) {
+      return path.resolve(parent, '..');
+    }
+    return parent;
+  }
+  if (fs.existsSync(path.join(process.cwd(), 'backend'))) {
+    return path.join(process.cwd(), 'backend');
+  }
+  return process.cwd();
+})();
 
-export const CONFIG_DIR = fs.existsSync(path.join(BACKEND_DIR, 'config'))
-  ? path.join(BACKEND_DIR, 'config')
-  : path.join(process.cwd(), 'backend', 'config');
+export const CONFIG_DIR = path.join(BACKEND_DIR, 'config');
 
 export const UPLOADS_DIR = (() => {
-  const dir = fs.existsSync(path.join(BACKEND_DIR, 'uploads'))
-    ? path.join(BACKEND_DIR, 'uploads')
-    : path.join(process.cwd(), 'backend', 'uploads');
+  const dir = path.join(BACKEND_DIR, 'uploads');
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
