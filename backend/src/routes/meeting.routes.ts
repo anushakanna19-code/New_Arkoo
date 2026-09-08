@@ -319,11 +319,11 @@ router.post('/process-meeting', async (req, res) => {
 
         if (openaiKey) {
           try {
-            sendProgress(65, 'Transcribing audio with OpenAI Whisper...');
+            sendProgress(65, 'Transcribing audio with OpenAI Transcribe (Whisper-1)...');
             transcriptText = await transcribeWithOpenai(audioBuffer, `${safeMeetingId}.wav`, knownNames);
-            logger.info('MeetingRoutes', 'Transcribed with OpenAI Whisper successfully');
+            logger.info('MeetingRoutes', 'Transcribed with OpenAI Transcribe successfully');
           } catch (whisperErr: any) {
-            logger.warn('MeetingRoutes', `OpenAI Whisper failed: ${whisperErr.message}. Falling back to Gemini.`);
+            logger.warn('MeetingRoutes', `OpenAI Transcribe failed: ${whisperErr.message}. Falling back to Gemini.`);
           }
         }
 
@@ -405,11 +405,11 @@ router.post('/process-meeting', async (req, res) => {
 
       if (openaiKey) {
         try {
-          sendProgress(85, 'Analyzing transcript with OpenAI GPT-4o...');
+          sendProgress(85, 'Analyzing transcript with OpenAI GPT-4o Mini...');
           const openaiRes = await generateContentWithOpenai(prompt);
           resultText = openaiRes.text;
         } catch (openaiErr: any) {
-          logger.warn('MeetingRoutes', `OpenAI GPT-4o analysis failed: ${openaiErr.message}. Falling back to Gemini.`);
+          logger.warn('MeetingRoutes', `OpenAI GPT-4o Mini analysis failed: ${openaiErr.message}. Falling back to Gemini.`);
         }
       }
 

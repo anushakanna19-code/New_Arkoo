@@ -644,7 +644,7 @@ export function SettingsModule({
                     AI Engine Diagnostics & API Key
                   </CardTitle>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Configure and test your OpenAI (Whisper & GPT-4o) or Google Gemini credentials.
+                    Configure and test your OpenAI (Audio Transcribe & GPT-4o Mini) or Google Gemini credentials.
                   </p>
                 </div>
 
@@ -663,7 +663,7 @@ export function SettingsModule({
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      OpenAI (Whisper & ChatGPT)
+                      OpenAI (Audio Transcribe & GPT-4o Mini)
                     </button>
                     <button
                       type="button"
@@ -700,7 +700,7 @@ export function SettingsModule({
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold text-slate-700 block">
-                      OpenAI API Key (for Whisper Audio Transcription & GPT-4o MOM Analysis)
+                      OpenAI API Key (for Audio Transcribe & GPT-4o Mini MOM Analysis)
                     </Label>
                     <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
                       Active AI Provider
@@ -724,7 +724,7 @@ export function SettingsModule({
                     </Button>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Get your secret key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">OpenAI Platform (platform.openai.com/api-keys)</a> to power high-fidelity Whisper transcription and GPT-4o task extraction.
+                    Get your secret key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">OpenAI Platform (platform.openai.com/api-keys)</a> to power high-fidelity Audio Transcribe and GPT-4o Mini task extraction.
                   </p>
                 </div>
               ) : (

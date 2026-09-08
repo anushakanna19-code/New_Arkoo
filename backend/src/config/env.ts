@@ -37,7 +37,13 @@ export const BACKEND_DIR = (() => {
   return process.cwd();
 })();
 
-export const CONFIG_DIR = path.join(BACKEND_DIR, 'config');
+export const CONFIG_DIR = (() => {
+  const dir = path.join(BACKEND_DIR, 'config');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+})();
 
 export const UPLOADS_DIR = (() => {
   const dir = path.join(BACKEND_DIR, 'uploads');
@@ -85,16 +91,24 @@ export const env = {
 // ─── Settings File Paths ───────────────────────────────────
 export const GDRIVE_SETTINGS_FILE = fs.existsSync(path.join(CONFIG_DIR, 'gdrive-settings.json'))
   ? path.join(CONFIG_DIR, 'gdrive-settings.json')
-  : path.join(process.cwd(), 'gdrive-settings.json');
+  : (fs.existsSync(path.join(process.cwd(), 'gdrive-settings.json'))
+      ? path.join(process.cwd(), 'gdrive-settings.json')
+      : path.join(CONFIG_DIR, 'gdrive-settings.json'));
 
 export const GEMINI_SETTINGS_FILE = fs.existsSync(path.join(CONFIG_DIR, 'gemini-settings.json'))
   ? path.join(CONFIG_DIR, 'gemini-settings.json')
-  : path.join(process.cwd(), 'gemini-settings.json');
+  : (fs.existsSync(path.join(process.cwd(), 'gemini-settings.json'))
+      ? path.join(process.cwd(), 'gemini-settings.json')
+      : path.join(CONFIG_DIR, 'gemini-settings.json'));
 
 export const OPENAI_SETTINGS_FILE = fs.existsSync(path.join(CONFIG_DIR, 'openai-settings.json'))
   ? path.join(CONFIG_DIR, 'openai-settings.json')
-  : path.join(process.cwd(), 'openai-settings.json');
+  : (fs.existsSync(path.join(process.cwd(), 'openai-settings.json'))
+      ? path.join(process.cwd(), 'openai-settings.json')
+      : path.join(CONFIG_DIR, 'openai-settings.json'));
 
 export const CLOUDINARY_SETTINGS_FILE = fs.existsSync(path.join(CONFIG_DIR, 'cloudinary-settings.json'))
   ? path.join(CONFIG_DIR, 'cloudinary-settings.json')
-  : path.join(process.cwd(), 'cloudinary-settings.json');
+  : (fs.existsSync(path.join(process.cwd(), 'cloudinary-settings.json'))
+      ? path.join(process.cwd(), 'cloudinary-settings.json')
+      : path.join(CONFIG_DIR, 'cloudinary-settings.json'));
