@@ -60,16 +60,30 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
 
     try {
       const payload: any = {
-        transcript: currentMeeting.transcript || ''
+        meetingId: currentMeeting?.id,
+        title: currentMeeting?.title,
+        participants: displayParticipants,
+        transcript: currentMeeting?.transcript || ''
       };
 
-      const res = await fetch(getApiUrl(`/api/meetings/${currentMeeting.id}/regenerate-mom`), {
+      let res = await fetch(getApiUrl(`/api/meetings/${currentMeeting.id}/regenerate-mom`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload)
       });
+
+      // Fallback endpoint if route is hosted under /api/regenerate-mom
+      if (res.status === 404) {
+        res = await fetch(getApiUrl(`/api/regenerate-mom`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload)
+        });
+      }
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));

@@ -474,36 +474,41 @@ router.post('/ask-meeting', async (req, res) => {
 });
 
 // ─── Regenerate MOM ────────────────────────────────────────
-router.post('/meetings/:meetingId/regenerate-mom', async (req, res) => {
-  const { meetingId } = req.params;
-  const { transcript: customTranscript, knownNames: customKnownNames } = req.body || {};
+const handleRegenerateMomRequest = async (req: any, res: any) => {
+  const meetingId = req.params?.meetingId || req.body?.meetingId;
+  const { transcript: customTranscript, knownNames: customKnownNames, title, participants } = req.body || {};
 
-  if (!meetingId) {
-    return res.status(400).json({ error: 'Missing meetingId parameter' });
-  }
+  let transcriptText = (customTranscript || '').trim();
+  let knownNames = customKnownNames || (Array.isArray(participants) ? participants.join(', ') : '');
 
   const dbFirestore = getFirestore();
-  if (!dbFirestore) {
-    return res.status(500).json({ error: 'Firestore database connection not available' });
-  }
 
   try {
-    const meetingDoc = await dbFirestore.collection('meetings').doc(meetingId).get();
-    if (!meetingDoc.exists) {
-      return res.status(404).json({ error: 'Meeting not found' });
+    if (meetingId && dbFirestore) {
+      try {
+        const meetingDoc = await dbFirestore.collection('meetings').doc(meetingId).get();
+        if (meetingDoc.exists) {
+          const meetingData = meetingDoc.data() || {};
+          if (!transcriptText) {
+            transcriptText = (meetingData.transcript || '').trim();
+          }
+          if (!knownNames) {
+            knownNames = Array.isArray(meetingData.participants) ? meetingData.participants.join(', ') : '';
+          }
+        }
+      } catch (docErr) {
+        logger.warn('MeetingRoutes', `Could not fetch meeting doc ${meetingId} from Firestore: ${docErr}`);
+      }
     }
 
-    const meetingData = meetingDoc.data() || {};
-    let transcriptText = (customTranscript || meetingData.transcript || '').trim();
-    const knownNames = customKnownNames || (Array.isArray(meetingData.participants) ? meetingData.participants.join(', ') : '');
-
     if (!transcriptText) {
-      return res.status(400).json({ error: 'No transcript available for this meeting to regenerate MOM from.' });
+      return res.status(400).json({ error: 'No transcript text available for this meeting to regenerate MOM from.' });
     }
 
     const prompt = `
       You are an expert AI meeting analyst for Arkoo Prebuild Pvt. Ltd.
       Analyze the following meeting transcript and produce a fully structured JSON output. DO NOT include any text outside the JSON object.
+      ${title ? `\nMEETING TITLE: ${title}\n` : ''}
       ${knownNames ? `\nKNOWN TEAM MEMBERS: ${knownNames}\n` : ''}
 
       LANGUAGE RULE: ALL output MUST be in Roman/English letters ONLY. NO Devanagari script.
@@ -554,7 +559,7 @@ router.post('/meetings/:meetingId/regenerate-mom', async (req, res) => {
     if (!resultText) throw new Error('AI engine returned an empty response.');
     const result = JSON.parse(resultText);
 
-    // Update meeting doc in Firestore
+    // Update meeting doc in Firestore if meetingId is provided
     const updatePayload: any = {
       mom: (result.mom && typeof result.mom === 'object') ? result.mom : null,
       momText: (result.mom && typeof result.mom === 'string') ? result.mom : null,
@@ -568,9 +573,15 @@ router.post('/meetings/:meetingId/regenerate-mom', async (req, res) => {
       updatePayload.transcript = customTranscript;
     }
 
-    await dbFirestore.collection('meetings').doc(meetingId).update(updatePayload);
+    if (meetingId && dbFirestore) {
+      try {
+        await dbFirestore.collection('meetings').doc(meetingId).set(updatePayload, { merge: true });
+      } catch (saveErr) {
+        logger.warn('MeetingRoutes', `Failed to write update to Firestore for meeting ${meetingId}: ${saveErr}`);
+      }
+    }
 
-    logger.info('MeetingRoutes', `Regenerated MOM for meeting ${meetingId} successfully`);
+    logger.info('MeetingRoutes', `Regenerated MOM for meeting ${meetingId || 'direct'} successfully`);
     res.json({
       success: true,
       message: 'Minutes of Meeting (MOM) regenerated successfully!',
@@ -584,6 +595,9 @@ router.post('/meetings/:meetingId/regenerate-mom', async (req, res) => {
     logger.error('MeetingRoutes', 'Regenerate MOM failure', error);
     res.status(500).json({ error: error.message || 'Failed to regenerate MOM' });
   }
-});
+};
+
+router.post('/meetings/:meetingId/regenerate-mom', handleRegenerateMomRequest);
+router.post('/regenerate-mom', handleRegenerateMomRequest);
 
 export default router;
