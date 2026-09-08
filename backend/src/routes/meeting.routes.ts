@@ -473,4 +473,117 @@ router.post('/ask-meeting', async (req, res) => {
   }
 });
 
+// ─── Regenerate MOM ────────────────────────────────────────
+router.post('/meetings/:meetingId/regenerate-mom', async (req, res) => {
+  const { meetingId } = req.params;
+  const { transcript: customTranscript, knownNames: customKnownNames } = req.body || {};
+
+  if (!meetingId) {
+    return res.status(400).json({ error: 'Missing meetingId parameter' });
+  }
+
+  const dbFirestore = getFirestore();
+  if (!dbFirestore) {
+    return res.status(500).json({ error: 'Firestore database connection not available' });
+  }
+
+  try {
+    const meetingDoc = await dbFirestore.collection('meetings').doc(meetingId).get();
+    if (!meetingDoc.exists) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+
+    const meetingData = meetingDoc.data() || {};
+    let transcriptText = (customTranscript || meetingData.transcript || '').trim();
+    const knownNames = customKnownNames || (Array.isArray(meetingData.participants) ? meetingData.participants.join(', ') : '');
+
+    if (!transcriptText) {
+      return res.status(400).json({ error: 'No transcript available for this meeting to regenerate MOM from.' });
+    }
+
+    const prompt = `
+      You are an expert AI meeting analyst for Arkoo Prebuild Pvt. Ltd.
+      Analyze the following meeting transcript and produce a fully structured JSON output. DO NOT include any text outside the JSON object.
+      ${knownNames ? `\nKNOWN TEAM MEMBERS: ${knownNames}\n` : ''}
+
+      LANGUAGE RULE: ALL output MUST be in Roman/English letters ONLY. NO Devanagari script.
+
+      TASK EXTRACTION RULE: Extract EVERY task, action item, assignment, follow-up, and deliverable. Do NOT skip or merge tasks.
+
+      {
+        "transcript": "Concise cleaned-up transcript in English letters.",
+        "summary": "Professional 2-sentence summary.",
+        "mom": {
+          "participants": ["Names"],
+          "agenda": ["Topics"],
+          "discussionPoints": [{ "topic": "Topic", "summary": "Summary", "points": ["Point"] }],
+          "keyDecisions": ["Decision"],
+          "risks": ["Risk"],
+          "nextSteps": ["Step"]
+        },
+        "tasks": [{ "title": "Task", "description": "Full explanation", "assigneeName": "Name or 'Unassigned'", "department": "Department", "priority": "low/medium/high/critical", "deadline": "by Friday or null" }]
+      }
+
+      Transcript:
+      """
+      ${transcriptText}
+      """
+    `;
+
+    let resultText = '';
+    const openaiKey = getOpenaiApiKey();
+
+    if (openaiKey) {
+      try {
+        const openaiRes = await generateContentWithOpenai(prompt);
+        resultText = openaiRes.text;
+      } catch (openaiErr: any) {
+        logger.warn('MeetingRoutes', `OpenAI GPT-4o Mini analysis failed during regeneration: ${openaiErr.message}. Falling back to Gemini.`);
+      }
+    }
+
+    if (!resultText) {
+      const ai = getGenAI();
+      const completion = await generateContentWithResilience(ai, { contents: prompt });
+      resultText = completion?.text || '';
+    }
+
+    if (resultText.startsWith('```json')) resultText = resultText.replace(/^```json/, '').replace(/```$/, '').trim();
+    else if (resultText.startsWith('```')) resultText = resultText.replace(/^```/, '').replace(/```$/, '').trim();
+
+    if (!resultText) throw new Error('AI engine returned an empty response.');
+    const result = JSON.parse(resultText);
+
+    // Update meeting doc in Firestore
+    const updatePayload: any = {
+      mom: (result.mom && typeof result.mom === 'object') ? result.mom : null,
+      momText: (result.mom && typeof result.mom === 'string') ? result.mom : null,
+      summary: result.summary || 'Summary updated.',
+      tasksCount: Array.isArray(result.tasks) ? result.tasks.length : 0,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      momRegeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (customTranscript) {
+      updatePayload.transcript = customTranscript;
+    }
+
+    await dbFirestore.collection('meetings').doc(meetingId).update(updatePayload);
+
+    logger.info('MeetingRoutes', `Regenerated MOM for meeting ${meetingId} successfully`);
+    res.json({
+      success: true,
+      message: 'Minutes of Meeting (MOM) regenerated successfully!',
+      data: result,
+      mom: updatePayload.mom,
+      summary: updatePayload.summary,
+      transcript: updatePayload.transcript || transcriptText,
+      tasksCount: updatePayload.tasksCount
+    });
+  } catch (error: any) {
+    logger.error('MeetingRoutes', 'Regenerate MOM failure', error);
+    res.status(500).json({ error: error.message || 'Failed to regenerate MOM' });
+  }
+});
+
 export default router;
