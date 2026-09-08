@@ -875,10 +875,10 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
           )}
 
           {/* Meeting Audio Player — shown standalone only when no discussionPoints exist */}
-          {(currentMeeting.audioUrl || currentMeeting.driveFileUrl) && discussionPoints.length === 0 && (
+          {(currentMeeting.audioUrl || currentMeeting.driveFileUrl || currentMeeting.backupDriveFileUrl) && discussionPoints.length === 0 && (
             <MeetingAudioPlayer 
               audioUrl={currentMeeting.audioUrl} 
-              driveFileUrl={currentMeeting.driveFileUrl}
+              driveFileUrl={currentMeeting.driveFileUrl || currentMeeting.backupDriveFileUrl}
               title={currentMeeting.title} 
               meetingId={currentMeeting.id} 
             />
