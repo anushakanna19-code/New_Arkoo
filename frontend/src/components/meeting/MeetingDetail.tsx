@@ -53,10 +53,10 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
     setCurrentMeeting(meeting);
   }, [meeting]);
 
-    const handleRegenerateMom = async () => {
+  const handleRegenerateMom = async () => {
     if (isRegeneratingMom) return;
     setIsRegeneratingMom(true);
-    const regenToast = toast.loading("Analyzing transcript and regenerating Minutes of Meeting with OpenAI GPT-5.4 Mini...");
+    const regenToast = toast.loading("Analyzing transcript and regenerating Minutes of Meeting...");
 
     try {
       const payload: any = {
@@ -101,7 +101,7 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
         updatedAt: new Date()
       }));
 
-      toast.success("Minutes of Meeting (MOM) regenerated successfully with GPT-5.4 Mini!", { id: regenToast });
+      toast.success("Minutes of Meeting (MOM) regenerated successfully!", { id: regenToast });
     } catch (err: any) {
       toast.error(`MOM regeneration failed: ${err.message || String(err)}`, { id: regenToast });
     } finally {

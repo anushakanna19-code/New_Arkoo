@@ -319,7 +319,7 @@ router.post('/process-meeting', async (req, res) => {
 
         if (openaiKey) {
           try {
-            sendProgress(65, 'Transcribing audio with OpenAI Transcribe (Whisper-1)...');
+            sendProgress(65, 'Transcribing meeting speech...');
             transcriptText = await transcribeWithOpenai(audioBuffer, `${safeMeetingId}.wav`, knownNames);
             logger.info('MeetingRoutes', 'Transcribed with OpenAI Transcribe successfully');
           } catch (whisperErr: any) {
@@ -405,7 +405,7 @@ router.post('/process-meeting', async (req, res) => {
 
       if (openaiKey) {
         try {
-          sendProgress(85, 'Analyzing transcript with OpenAI GPT-5.4 Mini...');
+          sendProgress(85, 'Analyzing transcript & generating MOM...');
           const openaiRes = await generateContentWithOpenai(prompt);
           resultText = openaiRes.text;
         } catch (openaiErr: any) {
@@ -415,7 +415,7 @@ router.post('/process-meeting', async (req, res) => {
 
       if (!resultText) {
         const ai = getGenAI();
-        sendProgress(85, 'Analyzing transcript with Gemini...');
+        sendProgress(85, 'Analyzing transcript & generating MOM...');
         const completion = await generateContentWithResilience(ai, { contents: prompt });
         resultText = completion?.text || '';
       }
