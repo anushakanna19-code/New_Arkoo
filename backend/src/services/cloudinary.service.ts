@@ -80,9 +80,10 @@ export async function uploadAudioToCloudinary(
     return new Promise((resolve) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          resource_type: 'auto',
+          resource_type: 'video',
           folder: 'arkoo_recordings',
           public_id: publicId,
+          format: 'mp3',
         },
         (error, result) => {
           if (error) {
@@ -110,53 +111,45 @@ export async function getCloudinaryAudioUrl(meetingId: string): Promise<string |
   const apiKey = env.CLOUDINARY_API_KEY || localSettings.apiKey || '';
   const apiSecret = env.CLOUDINARY_API_SECRET || localSettings.apiSecret || '';
 
-  if (!cloudName) {
+  if (!cloudName || !apiKey || !apiSecret) {
     return null;
   }
 
   try {
     cloudinary.config({
       cloud_name: cloudName,
-      api_key: apiKey || undefined,
-      api_secret: apiSecret || undefined,
+      api_key: apiKey,
+      api_secret: apiSecret,
       secure: true,
     });
 
     const safeId = (meetingId || '').toString().replace(/[^a-zA-Z0-9_-]/g, '');
     if (!safeId) return null;
 
-    // If API credentials are present, query Cloudinary Admin API for the exact resource
-    if (apiKey && apiSecret) {
-      const candidates = [
-        `arkoo_recordings/recording_${safeId}`,
-        `recording_${safeId}`,
-        `arkoo_recordings/${safeId}`,
-        safeId,
-      ];
+    const candidates = [
+      `arkoo_recordings/recording_${safeId}`,
+      `recording_${safeId}`,
+      `arkoo_recordings/${safeId}`,
+      safeId,
+    ];
 
-      for (const pid of candidates) {
-        for (const rType of ['video', 'raw', 'image'] as const) {
-          try {
-            const res = await cloudinary.api.resource(pid, { resource_type: rType });
-            if (res?.secure_url) {
-              logger.info('CloudinaryService', `Found Cloudinary resource: ${res.secure_url}`);
-              return res.secure_url;
-            }
-          } catch {
-            // continue checking
+    for (const pid of candidates) {
+      for (const rType of ['video', 'raw'] as const) {
+        try {
+          const res = await cloudinary.api.resource(pid, { resource_type: rType });
+          if (res?.secure_url) {
+            logger.info('CloudinaryService', `Verified Cloudinary resource: ${res.secure_url}`);
+            return res.secure_url;
           }
+        } catch {
+          // not found under this candidate path/type, check next
         }
       }
     }
 
-    // Fallback: Generate Cloudinary secure delivery URL
-    const generatedUrl = cloudinary.url(`arkoo_recordings/recording_${safeId}`, {
-      resource_type: 'video',
-      secure: true,
-    });
-    return generatedUrl;
+    return null;
   } catch (err) {
-    logger.error('CloudinaryService', 'Error getting Cloudinary audio URL', err);
+    logger.error('CloudinaryService', 'Error querying Cloudinary API for audio', err);
     return null;
   }
 }
