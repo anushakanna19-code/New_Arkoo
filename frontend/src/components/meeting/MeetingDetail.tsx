@@ -23,8 +23,7 @@ import {
   User,
   AlertCircle,
   Sparkles,
-  RefreshCw,
-  Edit3
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -45,8 +44,6 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
   const [activeTab, setActiveTab] = useState<'mom' | 'transcript' | 'tasks' | 'ask'>('mom');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isRegeneratingMom, setIsRegeneratingMom] = useState(false);
-  const [isEditingTranscript, setIsEditingTranscript] = useState(false);
-  const [editedTranscript, setEditedTranscript] = useState('');
   const [retryingUpload, setRetryingUpload] = useState(false);
   const [currentMeeting, setCurrentMeeting] = useState(meeting);
   const [isEditingHost, setIsEditingHost] = useState(false);
@@ -56,20 +53,15 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
     setCurrentMeeting(meeting);
   }, [meeting]);
 
-  const handleRegenerateMom = async (overrideTranscript?: string) => {
+  const handleRegenerateMom = async () => {
     if (isRegeneratingMom) return;
     setIsRegeneratingMom(true);
     const regenToast = toast.loading("Analyzing transcript and regenerating Minutes of Meeting with OpenAI GPT-4o Mini...");
 
     try {
-      const payload: any = {};
-      const transcriptToSend = overrideTranscript !== undefined 
-        ? overrideTranscript 
-        : (isEditingTranscript ? editedTranscript : (currentMeeting.transcript || ''));
-      
-      if (transcriptToSend) {
-        payload.transcript = transcriptToSend;
-      }
+      const payload: any = {
+        transcript: currentMeeting.transcript || ''
+      };
 
       const res = await fetch(getApiUrl(`/api/meetings/${currentMeeting.id}/regenerate-mom`), {
         method: 'POST',
@@ -90,12 +82,11 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
         ...prev,
         mom: data.mom || data.data?.mom || prev.mom,
         summary: data.summary || data.data?.summary || prev.summary,
-        transcript: data.transcript || data.data?.transcript || transcriptToSend || prev.transcript,
+        transcript: data.transcript || data.data?.transcript || prev.transcript,
         tasksCount: data.tasksCount ?? data.data?.tasks?.length ?? prev.tasksCount,
         updatedAt: new Date()
       }));
 
-      setIsEditingTranscript(false);
       toast.success("Minutes of Meeting (MOM) regenerated successfully with GPT-4o Mini!", { id: regenToast });
     } catch (err: any) {
       toast.error(`MOM regeneration failed: ${err.message || String(err)}`, { id: regenToast });
@@ -854,66 +845,18 @@ export function MeetingDetail({ meeting, onBack, onDelete, profile, employees = 
           {/* Full Transcript Card */}
           {currentMeeting.transcript && (
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
                   <div className="w-6 h-6 rounded-lg bg-blue-100/70 text-blue-500 flex items-center justify-center text-xs">💬</div>
                   Full Meeting Transcript
                 </div>
-                <div className="flex items-center gap-2">
-                  {!isEditingTranscript ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditedTranscript(currentMeeting.transcript || '');
-                        setIsEditingTranscript(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition cursor-pointer border border-slate-200/60"
-                      title="Edit transcription text before regenerating MOM"
-                      id="edit-transcript-btn"
-                    >
-                      <Edit3 className="w-3.5 h-3.5 text-slate-500" /> Edit Transcript
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleRegenerateMom(editedTranscript)}
-                        disabled={isRegeneratingMom}
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-xl transition cursor-pointer shadow-xs disabled:opacity-50"
-                        id="save-and-regenerate-transcript-btn"
-                      >
-                        <Sparkles className={`w-3.5 h-3.5 ${isRegeneratingMom ? 'animate-spin' : ''}`} />
-                        {isRegeneratingMom ? 'Regenerating...' : 'Save & Regenerate MOM'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingTranscript(false)}
-                        className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-800 px-2 py-1 cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <span className="text-[10px] text-slate-400 font-medium bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
+                  Word-to-word verbatim · unclear words shown as ....
+                </span>
               </div>
-
-              {isEditingTranscript ? (
-                <div className="space-y-2">
-                  <textarea
-                    value={editedTranscript}
-                    onChange={(e) => setEditedTranscript(e.target.value)}
-                    className="w-full h-48 bg-slate-900 text-slate-100 font-mono text-xs p-4 rounded-xl leading-relaxed outline-none border border-blue-500 focus:ring-2 focus:ring-blue-500"
-                    placeholder="Edit transcription text..."
-                  />
-                  <p className="text-[11px] text-slate-500 italic">
-                    Fix any misheard names, keywords, or typos above, then click <strong>"Save & Regenerate MOM"</strong> to re-extract tasks and summary using GPT-4o Mini.
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-slate-900 text-slate-200 font-mono text-xs p-4 rounded-xl leading-relaxed whitespace-pre-wrap">
-                  {currentMeeting.transcript}
-                </div>
-              )}
+              <div className="bg-slate-900 text-slate-200 font-mono text-xs p-4 rounded-xl leading-relaxed whitespace-pre-wrap">
+                {currentMeeting.transcript}
+              </div>
             </div>
           )}
 
