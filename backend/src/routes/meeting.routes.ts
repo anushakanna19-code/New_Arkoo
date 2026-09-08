@@ -409,7 +409,7 @@ router.post('/process-meeting', async (req, res) => {
           const openaiRes = await generateContentWithOpenai(prompt);
           resultText = openaiRes.text;
         } catch (openaiErr: any) {
-          logger.warn('MeetingRoutes', `OpenAI GPT-5.4 Mini analysis failed: ${openaiErr.message}. Falling back to Gemini.`);
+          logger.warn('MeetingRoutes', `Primary AI analysis failed: ${openaiErr.message}. Falling back to secondary engine.`);
         }
       }
 
@@ -551,7 +551,7 @@ const handleRegenerateMomRequest = async (req: any, res: any) => {
         const openaiRes = await generateContentWithOpenai(prompt);
         resultText = openaiRes.text;
       } catch (openaiErr: any) {
-        logger.warn('MeetingRoutes', `OpenAI GPT-4o Mini analysis failed during regeneration: ${openaiErr.message}. Falling back to Gemini.`);
+        logger.warn('MeetingRoutes', `Primary AI analysis failed during regeneration: ${openaiErr.message}. Falling back to secondary engine.`);
       }
     }
 
