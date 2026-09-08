@@ -405,11 +405,11 @@ router.post('/process-meeting', async (req, res) => {
 
       if (openaiKey) {
         try {
-          sendProgress(85, 'Analyzing transcript with OpenAI GPT-4o Mini...');
+          sendProgress(85, 'Analyzing transcript with OpenAI GPT-5.4 Mini...');
           const openaiRes = await generateContentWithOpenai(prompt);
           resultText = openaiRes.text;
         } catch (openaiErr: any) {
-          logger.warn('MeetingRoutes', `OpenAI GPT-4o Mini analysis failed: ${openaiErr.message}. Falling back to Gemini.`);
+          logger.warn('MeetingRoutes', `OpenAI GPT-5.4 Mini analysis failed: ${openaiErr.message}. Falling back to Gemini.`);
         }
       }
 
