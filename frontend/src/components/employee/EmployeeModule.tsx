@@ -768,6 +768,8 @@ function EmployeeForm({ employee, onSuccess }: { employee?: any; onSuccess: () =
           locations:        d.locations        ?? prev.locations,
         }));
       }
+    }, (err) => {
+      console.warn('[EmployeeModule] Stakeholder options sync:', err?.message || err);
     });
     return unsub;
   }, []);

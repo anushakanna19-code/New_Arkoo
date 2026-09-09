@@ -852,7 +852,7 @@ export function MeetingModule({
             onProcessingFinished();
           }
         } catch (innerError: any) {
-          console.error(innerError);
+          console.warn('[MeetingModule] Audio processing warning:', innerError?.message || innerError);
           toast.error('Processing failed: ' + innerError.message, { id: 'processing-meeting' });
           try {
             await updateDoc(doc(db, 'meetings', meetingRefId), { 
@@ -868,7 +868,7 @@ export function MeetingModule({
       };
       reader.readAsDataURL(blob);
     } catch (error: any) {
-      console.error(error);
+      console.warn('[MeetingModule] Initial setup warning:', error?.message || error);
       toast.error('Initial setup failed: ' + error.message, { id: 'processing-meeting' });
       if (meetingRefId) {
         try {
@@ -1074,7 +1074,7 @@ export function MeetingModule({
       toast.success('Google Drive meeting intelligence generated successfully!', { id: 'processing-meeting' });
 
     } catch (innerError: any) {
-      console.error(innerError);
+      console.warn('[MeetingModule] Google Drive processing warning:', innerError?.message || innerError);
       toast.error('Google Drive processing failed: ' + innerError.message, { id: 'processing-meeting' });
       try {
         await updateDoc(doc(db, 'meetings', meetingRefId), { 

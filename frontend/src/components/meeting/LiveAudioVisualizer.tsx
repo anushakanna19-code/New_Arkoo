@@ -69,17 +69,17 @@ export function LiveAudioVisualizer({ stream }: { stream: MediaStream | null }) 
       };
 
       draw();
-    } catch (err) {
-      console.error('[Visualizer Error] Analyser failed:', err);
+    } catch (err: any) {
+      console.warn('[Visualizer] Analyser initialization notice:', err?.message || err);
     }
 
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
-      if (audioContext) {
+      if (audioContext && audioContext.state !== 'closed') {
         try {
-          audioContext.close();
+          audioContext.close().catch(() => {});
         } catch (e) {}
       }
     };

@@ -36,7 +36,7 @@ export function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: st
     const unsubscribe = onSnapshot(q, (snap) => {
       setVoiceNotes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => {
-      console.error('Voice Notes fetch error:', error);
+      console.warn('[VoiceSubSection] Voice Notes fetch warning:', error?.message || error);
     });
     return unsubscribe;
   }, [taskId]);
@@ -51,7 +51,10 @@ export function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: st
     audioChunksRef.current = [];
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const supportedMime = (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/webm'))
+        ? 'audio/webm'
+        : ((typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/mp4')) ? 'audio/mp4' : '');
+      const mediaRecorder = new MediaRecorder(stream, supportedMime ? { mimeType: supportedMime } : undefined);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (e) => {
@@ -61,7 +64,7 @@ export function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: st
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: supportedMime || 'audio/webm' });
         await handleSaveVoiceMemo(audioBlob);
 
         // Stop all tracks on the stream
@@ -84,7 +87,7 @@ export function VoiceSubSection({ taskId, profile, onLogActivity }: { taskId: st
 
       toast.info('Speak now, recording task memo...');
     } catch (e: any) {
-      console.error('Audio recorder initialization failed:', e);
+      console.warn('[VoiceSubSection] Audio recorder initialization:', e?.message || e);
       toast.error('Could not grant microphone authorization');
     }
   };

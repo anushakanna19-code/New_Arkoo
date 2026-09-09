@@ -60,9 +60,9 @@ function OptionCategory({
     <div className="space-y-3">
       <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{title}</h4>
       <div className="flex flex-wrap gap-2 min-h-[36px]">
-        {items.map(item => (
+        {items.map((item, idx) => (
           <span
-            key={item}
+            key={`${item}-${idx}`}
             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${color}`}
           >
             {item}
@@ -92,9 +92,9 @@ function OptionCategory({
           type="button"
           size="sm"
           onClick={handleAdd}
-          className="h-9 px-4 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shrink-0 flex items-center gap-1"
+          className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 h-9 font-bold text-xs"
         >
-          <Plus className="w-3.5 h-3.5" /> Add
+          <Plus className="w-3.5 h-3.5 mr-1" /> Add
         </Button>
       </div>
     </div>
@@ -121,8 +121,12 @@ function StakeholderOptionsEditor() {
         });
       } else {
         // First-time: seed defaults
-        await setDoc(ref, DEFAULT_STAKEHOLDER_OPTIONS);
+        try {
+          await setDoc(ref, DEFAULT_STAKEHOLDER_OPTIONS);
+        } catch (_e) {}
       }
+    }, (error) => {
+      console.warn('[Settings] Stakeholder options listener:', error?.message || error);
     });
     return unsub;
   }, []);
@@ -323,12 +327,6 @@ export function SettingsModule({
   const [gdriveLoading, setGdriveLoading] = useState(true);
 
 
-  // OpenAI API State
-  const [openaiData, setOpenaiData] = useState<any>({ connected: false });
-  const [openaiLoading, setOpenaiLoading] = useState(true);
-  const [savingOpenai, setSavingOpenai] = useState(false);
-  const [openaiKeyInput, setOpenaiKeyInput] = useState('');
-
   const fetchGDriveStatus = async () => {
     try {
       const url = getApiUrl('/api/gdrive/status');
@@ -347,65 +345,15 @@ export function SettingsModule({
           setFolderLinkInput('https://drive.google.com/drive/folders/1HVFyfSy0vqUEesI_ttEU3_byXDGhs5sl?usp=drive_link');
         }
       }
-    } catch (err) {
-      console.error('Failed to load Google Drive status:', err);
+    } catch (err: any) {
+      console.warn('[Settings] Google Drive status check:', err?.message || err);
     } finally {
       setGdriveLoading(false);
     }
   };
 
-  const fetchOpenaiStatus = async () => {
-    try {
-      const url = getApiUrl('/api/openai/status');
-      const authHeaders = await getAuthHeaders();
-      const res = await fetch(url, { headers: authHeaders });
-      if (res.ok) {
-        const text = await res.text();
-        let data: any = {};
-        try { data = text ? JSON.parse(text) : {}; } catch (e) {}
-        setOpenaiData(data);
-      }
-    } catch (err) {
-      console.error('Failed to load OpenAI status:', err);
-    } finally {
-      setOpenaiLoading(false);
-    }
-  };
-
-  const handleSaveOpenaiIntegrationKey = async () => {
-    if (!openaiKeyInput.trim()) {
-      toast.error('Please enter a valid AI API Key.');
-      return;
-    }
-    setSavingOpenai(true);
-    try {
-      const url = getApiUrl('/api/gemini/save-key');
-      const authHeaders = await getAuthHeaders();
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ apiKey: openaiKeyInput.trim() })
-      });
-      const text = await res.text();
-      let data: any = {};
-      try { data = text ? JSON.parse(text) : {}; } catch (e) {}
-      if (res.ok) {
-        toast.success(data.message || 'AI API Key saved successfully.');
-        setOpenaiKeyInput('');
-        fetchOpenaiStatus();
-      } else {
-        toast.error(data.error || 'Failed to save AI API Key.');
-      }
-    } catch (err: any) {
-      toast.error(`Error saving AI config: ${err.message}`);
-    } finally {
-      setSavingOpenai(false);
-    }
-  };
-
   useEffect(() => {
     fetchGDriveStatus();
-    fetchOpenaiStatus();
 
     const handleAuthMessage = (event: MessageEvent) => {
       if (event.data?.type === 'GDRIVE_AUTH_SUCCESS') {
@@ -644,7 +592,7 @@ export function SettingsModule({
                     AI Engine Diagnostics & API Key
                   </CardTitle>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Configure and test your OpenAI (Audio Transcribe & GPT-5.4 Mini) or Google Gemini credentials.
+                    Configure and test your OpenAI (GPT-Transcribe Audio & GPT-4o Mini) or Google Gemini credentials.
                   </p>
                 </div>
 
@@ -663,7 +611,7 @@ export function SettingsModule({
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      OpenAI (Audio Transcribe & GPT-5.4 Mini)
+                      OpenAI (GPT-Transcribe & GPT-4o Mini)
                     </button>
                     <button
                       type="button"
@@ -700,7 +648,7 @@ export function SettingsModule({
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold text-slate-700 block">
-                      OpenAI API Key (for Audio Transcribe & GPT-5.4 Mini MOM Analysis)
+                      OpenAI API Key (for GPT-Transcribe Audio & GPT-4o Mini MOM Analysis)
                     </Label>
                     <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
                       Active AI Provider
@@ -724,7 +672,7 @@ export function SettingsModule({
                     </Button>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Get your secret key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">OpenAI Platform (platform.openai.com/api-keys)</a> to power high-fidelity Audio Transcribe and GPT-5.4 Mini task extraction.
+                    Get your secret key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">OpenAI Platform (platform.openai.com/api-keys)</a> to power high-accuracy Audio Transcription (<a href="https://developers.openai.com/api/docs/models/gpt-transcribe" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">GPT-Transcribe</a>) and GPT-4o Mini task extraction.
                   </p>
                 </div>
               ) : (
@@ -819,7 +767,7 @@ export function SettingsModule({
                         <Layers className="w-3 h-3" /> Assigned Project ID
                       </Label>
                       <p className="text-xs font-bold text-slate-800 leading-tight">
-                        {diagnostic.projectId}
+                        {diagnostic.projectId || (selectedAiProvider === 'openai' ? 'OpenAI Default Workspace' : 'Standard Workspace')}
                       </p>
                     </div>
 

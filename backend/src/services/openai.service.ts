@@ -105,7 +105,7 @@ export async function performOpenaiDiagnostic(): Promise<any> {
       success: false,
       status: 'No API Key Configured',
       keySource,
-      modelUsed: 'gpt-4o, whisper-1',
+      modelUsed: 'gpt-4o-mini, gpt-transcribe',
       maskedKey: 'None',
       error: 'No OpenAI API key found in settings or environment.',
       explanation: 'Please enter a valid OpenAI API Key (starts with sk-...) and click Save Key.',
@@ -126,9 +126,9 @@ export async function performOpenaiDiagnostic(): Promise<any> {
 
     return {
       success: true,
-      status: 'Succeeded (gpt-4o-mini & whisper-1)',
+      status: 'Succeeded (gpt-4o-mini & gpt-transcribe)',
       keySource,
-      modelUsed: 'gpt-4o-mini, gpt-4o, whisper-1',
+      modelUsed: 'gpt-4o-mini, gpt-transcribe',
       maskedKey,
       fullResponse: reply,
       explanation: 'Verification succeeded! OpenAI API key is valid and responsive.',
@@ -152,7 +152,7 @@ export async function performOpenaiDiagnostic(): Promise<any> {
       success: false,
       status,
       keySource,
-      modelUsed: 'gpt-4o-mini, whisper-1',
+      modelUsed: 'gpt-4o-mini, gpt-transcribe',
       maskedKey,
       error: errMessage,
       explanation,
@@ -161,7 +161,7 @@ export async function performOpenaiDiagnostic(): Promise<any> {
   }
 }
 
-// ─── Transcription via OpenAI Whisper ──────────────────────
+// ─── Transcription via OpenAI GPT-Transcribe (with fallback) ─
 export async function transcribeWithOpenai(
   audioInput: Buffer | string,
   fileName = 'audio.wav',
@@ -172,30 +172,46 @@ export async function transcribeWithOpenai(
     throw new Error('OpenAI client is not configured. Please save a valid OpenAI API key.');
   }
 
-  let fileObject: any;
-  if (Buffer.isBuffer(audioInput)) {
-    fileObject = await toFile(audioInput, fileName);
-  } else if (typeof audioInput === 'string' && fs.existsSync(audioInput)) {
-    fileObject = fs.createReadStream(audioInput);
-  } else {
-    throw new Error('Invalid audio input provided to transcribeWithOpenai');
-  }
-
   const prompt = `Meeting audio transcription. Keep words literal. Romanized transliteration for Hindi/Hinglish words.${
     knownNames ? ` Known participants: ${knownNames}` : ''
   }`;
 
-  const transcription = await client.audio.transcriptions.create({
-    file: fileObject,
-    model: 'whisper-1',
-    prompt,
-    response_format: 'text',
-  });
+  const getFileStream = async () => {
+    if (Buffer.isBuffer(audioInput)) {
+      return await toFile(audioInput, fileName);
+    } else if (typeof audioInput === 'string' && fs.existsSync(audioInput)) {
+      return fs.createReadStream(audioInput);
+    }
+    throw new Error('Invalid audio input provided to transcribeWithOpenai');
+  };
 
-  return typeof transcription === 'string' ? transcription.trim() : (transcription as any).text?.trim() || '';
+  try {
+    const fileObject = await getFileStream();
+    const transcription = await client.audio.transcriptions.create({
+      file: fileObject,
+      model: 'gpt-transcribe',
+      prompt,
+      response_format: 'text',
+    });
+    return typeof transcription === 'string' ? transcription.trim() : (transcription as any).text?.trim() || '';
+  } catch (transcribeErr: any) {
+    logger.warn('OpenAIService', `gpt-transcribe attempt note: ${transcribeErr?.message || transcribeErr}. Attempting fallback to whisper-1.`);
+    try {
+      const fallbackFile = await getFileStream();
+      const fallback = await client.audio.transcriptions.create({
+        file: fallbackFile,
+        model: 'whisper-1',
+        prompt,
+        response_format: 'text',
+      });
+      return typeof fallback === 'string' ? fallback.trim() : (fallback as any).text?.trim() || '';
+    } catch (whisperErr: any) {
+      throw new Error(`Transcription failed on both gpt-transcribe and whisper-1: ${whisperErr?.message || whisperErr}`);
+    }
+  }
 }
 
-// ─── Text Completion / Analysis via GPT-4o ────────────────
+// ─── Text Completion / Analysis via GPT-4o Mini ───────────
 export async function generateContentWithOpenai(
   prompt: string,
   systemPrompt = 'You are an executive AI assistant generating precise meeting minutes, action items, and structural analysis in structured JSON.'

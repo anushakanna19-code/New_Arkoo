@@ -564,8 +564,8 @@ export function TaskModule({ profile }: { profile: any }) {
       );
       await Promise.all(promises);
       toast.success('Marked all notifications as read');
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.warn('[TaskModule] Failed to mark notifications as read:', e?.message || e);
     }
   };
 
@@ -577,8 +577,8 @@ export function TaskModule({ profile }: { profile: any }) {
       );
       await Promise.all(promises);
       toast.success('Alert logs cleared');
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.warn('[TaskModule] Failed to clear alerts:', e?.message || e);
     }
   };
 

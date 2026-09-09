@@ -34,7 +34,7 @@ export function NotesSubSection({ taskId, profile, onLogActivity }: { taskId: st
     const unsubscribe = onSnapshot(q, (snap) => {
       setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => {
-      console.error('Notes fetch error:', error);
+      console.warn('[NotesSubSection] Notes fetch warning:', error?.message || error);
     });
     return unsubscribe;
   }, [taskId]);

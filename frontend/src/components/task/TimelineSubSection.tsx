@@ -16,7 +16,7 @@ export function TimelineSubSection({ taskId }: { taskId: string }) {
     const unsubscribe = onSnapshot(q, (snap) => {
       setActivities(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => {
-      console.error('Activities fetch error:', error);
+      console.warn('[TimelineSubSection] Activities fetch warning:', error?.message || error);
     });
     return unsubscribe;
   }, [taskId]);

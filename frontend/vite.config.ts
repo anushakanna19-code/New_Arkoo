@@ -27,10 +27,26 @@ export default defineConfig(() => {
         '/api': {
           target: 'http://localhost:3000',
           changeOrigin: true,
+          configure: (proxy) => {
+            proxy.on('error', (_err, _req, res) => {
+              if (!res.headersSent && typeof (res as any).writeHead === 'function') {
+                (res as any).writeHead(503, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Backend service temporarily unavailable', status: 'UNAVAILABLE' }));
+              }
+            });
+          },
         },
         '/uploads': {
           target: 'http://localhost:3000',
           changeOrigin: true,
+          configure: (proxy) => {
+            proxy.on('error', (_err, _req, res) => {
+              if (!res.headersSent && typeof (res as any).writeHead === 'function') {
+                (res as any).writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('Not found');
+              }
+            });
+          },
         },
       },
       hmr: process.env.DISABLE_HMR !== 'true',
